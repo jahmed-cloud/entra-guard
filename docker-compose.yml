@@ -45,14 +45,25 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL:        postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL:           redis://redis:6379/0
-      CELERY_BROKER_URL:   redis://redis:6379/1
+      DATABASE_URL:          postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL:             redis://redis:6379/0
+      CELERY_BROKER_URL:     redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      AZURE_TENANT_ID:     ${AZURE_TENANT_ID}
-      AZURE_CLIENT_ID:     ${AZURE_CLIENT_ID}
-      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
-      SECRET_KEY:          ${SECRET_KEY:-changeme}
+      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+      ENTRA_TENANT_ID:       ${AZURE_TENANT_ID}
+      ENTRA_CLIENT_ID:       ${AZURE_CLIENT_ID}
+      ENTRA_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+      SECRET_KEY:            ${SECRET_KEY}
+      TARGET_NAME:           ${TARGET_NAME:-My Azure Tenant}
+      AUTH_ENABLED:          ${AUTH_ENABLED:-false}
+      LOCAL_ADMIN_USERNAME:  ${LOCAL_ADMIN_USERNAME:-admin}
+      LOCAL_ADMIN_PASSWORD:  ${LOCAL_ADMIN_PASSWORD:-}
+      JWT_EXPIRE_HOURS:      ${JWT_EXPIRE_HOURS:-8}
+      APP_BASE_URL:          ${APP_BASE_URL:-http://localhost:3000}
+      INSTANCE_NAME:         ${INSTANCE_NAME:-EntraGuard}
+      TELEMETRY_ENABLED:     ${TELEMETRY_ENABLED:-false}
     depends_on:
       postgres: {condition: service_healthy}
       redis:    {condition: service_healthy}
