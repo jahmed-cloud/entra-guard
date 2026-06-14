@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev build-essential && rm -rf /var/lib/apt/lists/*
+COPY services/assessment-engine/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY services/assessment-engine/app ./app
+CMD ["celery", "-A", "app.tasks", "worker", "--loglevel=info", "--concurrency=2"]

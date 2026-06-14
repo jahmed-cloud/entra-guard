@@ -1,0 +1,124 @@
+# ============================================================================
+# EntraGuard — Single Stack
+# Works locally (port 3000) and in production (port 80)
+# cp .env.example .env && nano .env && docker compose up -d
+# ============================================================================
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: entra-guard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-cspm}
+      POSTGRES_USER:     ${POSTGRES_USER:-cspm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cspm_user} -d ${POSTGRES_DB:-cspm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    container_name: entra-guard-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    networks: [internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: entra-guard-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL:        postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL:           redis://redis:6379/0
+      CELERY_BROKER_URL:   redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AZURE_TENANT_ID:     ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID:     ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+      SECRET_KEY:          ${SECRET_KEY:-changeme}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis:    {condition: service_healthy}
+    networks: [internal, external]
+
+  assessment-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.engine
+    container_name: entra-guard-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL:          postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL:             redis://redis:6379/0
+      CELERY_BROKER_URL:     redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+      ENTRA_TENANT_ID:       ${AZURE_TENANT_ID}
+      ENTRA_CLIENT_ID:       ${AZURE_CLIENT_ID}
+      ENTRA_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis:    {condition: service_healthy}
+    networks: [internal, external]
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.engine
+    container_name: entra-guard-scheduler
+    restart: unless-stopped
+    command: celery -A app.tasks beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    environment:
+      DATABASE_URL:          postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL:             redis://redis:6379/0
+      CELERY_BROKER_URL:     redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis:    {condition: service_healthy}
+    networks: [internal, external]
+
+  web-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: entra-guard-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:80"
+    depends_on:
+      - api
+    networks: [internal, external]
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
