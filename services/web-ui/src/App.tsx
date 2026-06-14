@@ -108,7 +108,155 @@ const NAVS = [
   {id:"exceptions", icon:"⊘", l:"Exceptions"},
 ];
 
-function Nav({view, setView, fails}) {
+// ─── Auth ────────────────────────────────────────────────────────────────────
+const AUTH_CONFIG_URL = "/api/v1/auth/config";
+const AUTH_LOGIN_URL  = "/api/v1/auth/login";
+const AUTH_ME_URL     = "/api/v1/auth/me";
+const AUTH_LOGOUT_URL = "/api/v1/auth/logout";
+const MSAL_LOGIN_URL  = "/api/v1/auth/msal/login";
+
+function getStoredToken() {
+  try { return localStorage.getItem("eg_token") || ""; } catch { return ""; }
+}
+function setStoredToken(t) {
+  try { localStorage.setItem("eg_token", t); } catch {}
+}
+function clearStoredToken() {
+  try { localStorage.removeItem("eg_token"); } catch {}
+}
+
+async function authFetch(url, opts={}) {
+  const token = getStoredToken();
+  const headers = { "Content-Type":"application/json", ...(opts.headers||{}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const r = await fetch(url, { ...opts, headers });
+  if (r.status === 401) { clearStoredToken(); window.location.href = "/"; }
+  return r;
+}
+
+// ─── Login Page ───────────────────────────────────────────────────────────────
+function LoginPage({ onLogin, config }) {
+  const [user, setUser] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [err, setErr]   = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [tab, setTab] = React.useState(config.msal_enabled ? "msal" : "local");
+
+  const localLogin = async () => {
+    if (!user || !pass) { setErr("Enter username and password"); return; }
+    setLoading(true); setErr("");
+    try {
+      const r = await fetch(AUTH_LOGIN_URL, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({username:user, password:pass}),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.detail || "Invalid credentials"); return; }
+      setStoredToken(d.access_token);
+      onLogin(d.user);
+    } catch(e) { setErr("Connection failed"); }
+    finally { setLoading(false); }
+  };
+
+  const msalLogin = () => { window.location.href = MSAL_LOGIN_URL; };
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
+      background:"#111827",fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
+      <div style={{width:"100%",maxWidth:400}}>
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{width:52,height:52,borderRadius:12,
+            background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            margin:"0 auto 16px",fontSize:22,fontWeight:800,color:"#fff"}}>EG</div>
+          <div style={{fontSize:24,fontWeight:800,color:"#e2e8f0"}}>EntraGuard</div>
+          <div style={{fontSize:12,color:"#475569",marginTop:4}}>Azure Identity Security Posture Management</div>
+        </div>
+
+        <div style={{background:"#1e293b",borderRadius:12,padding:28,border:"1px solid #2d3748"}}>
+          {/* Tab switcher */}
+          {config.msal_enabled && config.local_admin_enabled && (
+            <div style={{display:"flex",background:"#111827",borderRadius:8,padding:4,marginBottom:24,gap:4}}>
+              {[["msal","Sign in with Microsoft"],["local","Local Admin"]].map(([t,l])=>(
+                <button key={t} onClick={()=>setTab(t)} style={{
+                  flex:1,padding:"7px 12px",borderRadius:6,border:"none",cursor:"pointer",
+                  background:tab===t?"#1e293b":"transparent",
+                  color:tab===t?"#e2e8f0":"#475569",
+                  fontSize:12,fontWeight:tab===t?600:400,transition:"all 0.15s"
+                }}>{l}</button>
+              ))}
+            </div>
+          )}
+
+          {/* MSAL button */}
+          {(tab === "msal" || (!config.local_admin_enabled && config.msal_enabled)) && (
+            <button onClick={msalLogin} style={{
+              width:"100%",padding:"12px 16px",borderRadius:8,border:"none",cursor:"pointer",
+              background:"#0ea5e9",color:"#fff",fontSize:14,fontWeight:600,
+              display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+              transition:"background 0.2s",
+            }}>
+              <svg width="18" height="18" viewBox="0 0 21 21" fill="currentColor">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+              </svg>
+              Sign in with Microsoft
+            </button>
+          )}
+
+          {/* Local admin form */}
+          {tab === "local" && config.local_admin_enabled && (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>USERNAME</div>
+                <input value={user} onChange={e=>setUser(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&localLogin()}
+                  placeholder="admin"
+                  style={{width:"100%",padding:"10px 12px",background:"#111827",
+                    border:"1px solid #2d3748",borderRadius:8,color:"#e2e8f0",
+                    fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>PASSWORD</div>
+                <input type="password" value={pass} onChange={e=>setPass(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&localLogin()}
+                  placeholder="••••••••"
+                  style={{width:"100%",padding:"10px 12px",background:"#111827",
+                    border:"1px solid #2d3748",borderRadius:8,color:"#e2e8f0",
+                    fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              {err && <div style={{fontSize:12,color:"#f87171",padding:"8px 12px",
+                background:"rgba(248,113,113,0.1)",borderRadius:6,border:"1px solid rgba(248,113,113,0.2)"}}>{err}</div>}
+              <button onClick={localLogin} disabled={loading}
+                style={{padding:"11px 16px",borderRadius:8,border:"none",cursor:"pointer",
+                  background:loading?"#334155":"linear-gradient(135deg,#0ea5e9,#6366f1)",
+                  color:"#fff",fontSize:14,fontWeight:600,marginTop:4,transition:"all 0.2s"}}>
+                {loading?"Signing in…":"Sign In"}
+              </button>
+            </div>
+          )}
+
+          {!config.msal_enabled && !config.local_admin_enabled && (
+            <div style={{textAlign:"center",color:"#64748b",fontSize:13}}>
+              Authentication is enabled but no login method is configured.<br/>
+              Set LOCAL_ADMIN_PASSWORD or configure AZURE credentials in .env.
+            </div>
+          )}
+        </div>
+
+        <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"#334155"}}>
+          EntraGuard v2.0 · Read-only · Your data stays on your server
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function Nav({view, setView, fails, user, onLogout}) {
   return (
     <aside style={{position:"fixed",top:0,left:0,bottom:0,width:216,
       background:"#1a2332",borderRight:"1px solid #2d3748",
@@ -151,16 +299,25 @@ function Nav({view, setView, fails}) {
         ))}
       </nav>
       {/* Footer */}
-      <div style={{padding:"14px 18px",borderTop:"1px solid #2d3748"}}>
-        <div style={{fontSize:9,color:"#374458",letterSpacing:"0.08em",marginBottom:4}}>OPERATOR</div>
-        <div style={{fontSize:12,color:"#8896aa",fontWeight:500}}>Junaid Ahmed</div>
-        <div style={{fontSize:9,color:"#374458",marginTop:1}}>iam@jahmed.cloud</div>
-        <div style={{display:"flex",gap:10,marginTop:10}}>
-          {[["GH","https://github.com/jahmed-cloud/entra-guard"],["DH","https://hub.docker.com/r/jahmed22/entra-guard"]].map(([l,u])=>(
-            <a key={l} href={u} target="_blank" style={{fontSize:9,color:"#374458",
-              textDecoration:"none",padding:"2px 6px",border:"1px solid #2d3748",borderRadius:3}}>{l}</a>
-          ))}
-        </div>
+      <div style={{padding:"12px 16px",borderTop:"1px solid #2d3748"}}>
+        {user && user.auth_type !== "disabled" ? (<>
+          <div style={{fontSize:9,color:"#374458",fontWeight:600,fontFamily:"monospace",marginBottom:4}}>SIGNED IN AS</div>
+          <div style={{fontSize:12,color:"#d1d9e6",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name||"User"}</div>
+          {user.email&&<div style={{fontSize:9,color:"#374458",marginTop:1,overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>}
+          <div style={{fontSize:9,color:"#374458",marginTop:2,fontFamily:"monospace"}}>{user.auth_type==="msal"?"Microsoft SSO":"Local Admin"}</div>
+          <button onClick={onLogout} style={{marginTop:8,width:"100%",padding:"5px",
+            background:"transparent",border:"1px solid #2d3748",borderRadius:5,
+            color:"#5a6a7e",fontSize:10,cursor:"pointer"}}>Sign out</button>
+        </>) : (<>
+          <div style={{fontSize:9,color:"#374458",marginBottom:3,fontFamily:"monospace"}}>OPERATOR</div>
+          <div style={{fontSize:11,color:"#8896aa"}}>Junaid Ahmed</div>
+          <div style={{fontSize:9,color:"#374458"}}>iam@jahmed.cloud</div>
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            {[["GH","https://github.com/jahmed-cloud/entra-guard"],["DH","https://hub.docker.com/r/jahmed22/entra-guard"]].map(([l,u])=>(
+              <a key={l} href={u} target="_blank" style={{fontSize:9,color:"#374458",textDecoration:"none",padding:"2px 5px",border:"1px solid #2d3748",borderRadius:3}}>{l}</a>
+            ))}
+          </div>
+        </>)}
       </div>
     </aside>
   );
@@ -982,15 +1139,67 @@ function Exceptions({findings}) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [view, setView] = useState("dashboard");
-  const [findings, setFindings] = useState([]);
-  const [runs, setRuns] = useState([]);
-  const [targets, setTargets] = useState([]);
-  const [scanning, setScanning] = useState(false);
-  const [online, setOnline] = useState(false);
-  const poll = useRef(null);
+  const [view, setView]     = React.useState("dashboard");
+  const [findings, setFindings] = React.useState([]);
+  const [runs, setRuns]     = React.useState([]);
+  const [targets, setTargets] = React.useState([]);
+  const [scanning, setScanning] = React.useState(false);
+  const [online, setOnline] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  const load = useCallback(async () => {
+  // Auth state
+  const [authConfig, setAuthConfig] = React.useState(null);
+  const [authUser, setAuthUser]     = React.useState(null);
+  const [authLoading, setAuthLoading] = React.useState(true);
+
+  const poll = React.useRef(null);
+
+  // Load auth config and check existing token
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await fetch(AUTH_CONFIG_URL).then(r=>r.json());
+        setAuthConfig(cfg);
+        if (!cfg.auth_enabled) {
+          setAuthUser({name:"Anonymous", auth_type:"disabled"});
+          setAuthLoading(false);
+          return;
+        }
+        // Check if we have a valid token
+        const token = getStoredToken();
+        if (token) {
+          const me = await authFetch(AUTH_ME_URL);
+          if (me.ok) {
+            const u = await me.json();
+            setAuthUser(u);
+          } else {
+            clearStoredToken();
+          }
+        }
+        // Check for MSAL cookie-based auth (set by /auth/callback)
+        if (!getStoredToken()) {
+          const me = await fetch(AUTH_ME_URL, {credentials:"include"});
+          if (me.ok) setAuthUser(await me.json());
+        }
+      } catch(e) {
+        console.error("Auth config failed:", e);
+        setAuthConfig({auth_enabled:false});
+        setAuthUser({name:"Anonymous", auth_type:"disabled"});
+      } finally {
+        setAuthLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleLogin = (user) => setAuthUser(user);
+
+  const handleLogout = async () => {
+    clearStoredToken();
+    await fetch(AUTH_LOGOUT_URL, {method:"POST", credentials:"include"});
+    setAuthUser(null);
+  };
+
+  const load = React.useCallback(async () => {
     try {
       const [f,r,t] = await Promise.all([
         apiFetch("/findings?page_size=500").catch(()=>({items:[]})),
@@ -1001,74 +1210,167 @@ export default function App() {
       setRuns(r.items||[]); setTargets(t.items||[]); setOnline(true);
       if(!(r.items||[]).find(x=>x.status==="running"||x.status==="pending")) {
         setScanning(false);
-        if(poll.current) { clearInterval(poll.current); poll.current=null; }
+        if(poll.current){clearInterval(poll.current);poll.current=null;}
       }
-    } catch { setOnline(false); }
+    } catch{setOnline(false);}
   }, []);
 
-  useEffect(() => {
+  React.useEffect(()=>{
+    if (!authUser) return;
     load();
-    const iv = setInterval(load, 15000);
-    return () => { clearInterval(iv); if(poll.current) clearInterval(poll.current); };
-  }, [load]);
+    const iv=setInterval(load,15000);
+    return()=>{clearInterval(iv);if(poll.current)clearInterval(poll.current);};
+  },[load, authUser]);
 
-  const scan = async () => {
-    try {
-      const t = await apiFetch("/targets"); const list = t.items||[];
-      if(!list.length) { alert("No target configured — check Azure credentials in .env"); return; }
+  const scan=async()=>{
+    try{
+      const t=await apiFetch("/targets");const list=t.items||[];
+      if(!list.length){alert("No target configured — check Azure credentials in .env");return;}
       setScanning(true);
-      await apiPost("/assessments/run", {target_id:list[0].id});
-      if(poll.current) clearInterval(poll.current);
-      poll.current = setInterval(load, 3000);
-    } catch(e) { alert("Scan failed: "+e); setScanning(false); }
+      await apiPost("/assessments/run",{target_id:list[0].id});
+      if(poll.current)clearInterval(poll.current);
+      poll.current=setInterval(load,3000);
+    }catch(e){alert("Scan failed: "+e);setScanning(false);}
   };
 
-  const fail = findings.filter(f=>f.status==="failed");
-  const crit = fail.filter(f=>f.severity==="Critical").length;
-  const last = runs.find(r=>r.status==="completed")?.completed_at;
+  const fail=findings.filter(f=>f.status==="failed");
+  const crit=fail.filter(f=>f.severity==="Critical").length;
+  const last=runs.find(r=>r.status==="completed")?.completed_at;
 
-  const VIEWS = {
-    dashboard:   <Dashboard findings={findings} runs={runs}/>,
-    findings:    <Findings findings={findings}/>,
-    compliance:  <Compliance findings={findings}/>,
-    remediation: <Remediation findings={findings}/>,
-    history:     <History runs={runs}/>,
-    exceptions:  <Exceptions findings={findings}/>,
+  const VIEWS={
+    dashboard:<Dashboard findings={findings} runs={runs}/>,
+    findings:<Findings findings={findings}/>,
+    compliance:<Compliance findings={findings}/>,
+    remediation:<Remediation findings={findings}/>,
+    history:<History runs={runs}/>,
+    exceptions:<Exceptions findings={findings}/>,
   };
+
+  // Loading
+  if (authLoading) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#111827"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{width:40,height:40,border:"3px solid #1e293b",borderTopColor:"#0ea5e9",
+          borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto 16px"}}/>
+        <div style={{color:"#475569",fontSize:12,fontFamily:"monospace"}}>LOADING…</div>
+      </div>
+    </div>
+  );
+
+  // Login wall
+  if (authConfig?.auth_enabled && !authUser) {
+    return <LoginPage onLogin={handleLogin} config={authConfig}/>;
+  }
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{
-          background:#111827;
-          color:#d1d9e6;
-          font-family:'Inter',system-ui,sans-serif;
-          font-size:14px;
-          line-height:1.6;
-          -webkit-font-smoothing:antialiased;
-          text-rendering:optimizeLegibility;
-        }
-        ::-webkit-scrollbar-thumb:hover{background:#4a5568;}
-        a{color:#38bdf8;}
+        body{background:#111827;color:#d1d9e6;font-family:'Inter',system-ui,sans-serif;
+          font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
         ::-webkit-scrollbar{width:4px;height:4px;}
         ::-webkit-scrollbar-track{background:#1a2332;}
-        ::-webkit-scrollbar-thumb{background:#2d3748;border-radius:2px;}
-        input,textarea,select{outline:none;font-family:inherit;}
+        ::-webkit-scrollbar-thumb{background:#374458;border-radius:2px;}
+        ::-webkit-scrollbar-thumb:hover{background:#4a5568;}
+        input,textarea,select{font-family:inherit;outline:none;}
         button{font-family:inherit;}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+        /* ── Mobile ── */
         @media(max-width:768px){
-          .nav-aside{display:none!important;}
-          .main-wrap{margin-left:0!important;}
-          .top-header{left:0!important;}
+          .eg-sidebar{
+            position:fixed!important;top:0;left:0;bottom:0;
+            transform:translateX(-100%);
+            transition:transform 0.25s ease;
+            z-index:200!important;
+            width:260px!important;
+          }
+          .eg-sidebar.open{transform:translateX(0)!important;}
+          .eg-overlay{
+            display:none;position:fixed;inset:0;background:#00000080;z-index:199;
+          }
+          .eg-overlay.open{display:block;}
+          .eg-main{margin-left:0!important;padding:14px!important;}
+          .eg-topbar{left:0!important;}
+          .eg-hamburger{display:flex!important;}
+          .eg-kpi-grid{grid-template-columns:repeat(3,1fr)!important;}
+          .eg-chart-row{grid-template-columns:1fr!important;}
+          .eg-top5-grid{grid-template-columns:1fr!important;}
+          .eg-sev-domain{grid-template-columns:1fr!important;}
+          .eg-findings-toolbar{flex-wrap:wrap!important;}
+          .eg-findings-toolbar select{width:100%!important;}
+          .eg-compliance-tabs{flex-wrap:wrap!important;}
+        }
+        @media(min-width:769px){
+          .eg-hamburger{display:none!important;}
         }
       `}</style>
-      <Nav view={view} setView={setView} fails={fail.length}/>
-      <Top target={targets[0]} scanning={scanning} onScan={scan} online={online} lastScan={last} crits={crit}/>
-      <main className="main-wrap" style={{marginLeft:216,marginTop:52,padding:22,minHeight:"calc(100vh - 52px)"}}>
+
+      {/* Mobile overlay */}
+      <div className={`eg-overlay${mobileOpen?" open":""}`} onClick={()=>setMobileOpen(false)}/>
+
+      {/* Sidebar */}
+      <div className={`eg-sidebar${mobileOpen?" open":""}`}
+        style={{position:"fixed",top:0,left:0,bottom:0,width:216,
+          background:"#1a2332",borderRight:"1px solid #2d3748",
+          display:"flex",flexDirection:"column",zIndex:100}}>
+        <Nav view={view} setView={(v)=>{setView(v);setMobileOpen(false);}} fails={fail.length}
+          user={authUser} onLogout={handleLogout}/>
+      </div>
+
+      {/* Topbar */}
+      <div className="eg-topbar" style={{position:"fixed",top:0,left:216,right:0,height:52,
+        background:"#1a2332",borderBottom:"1px solid #2d3748",
+        display:"flex",alignItems:"center",padding:"0 16px",gap:12,zIndex:90}}>
+        {/* Hamburger */}
+        <button className="eg-hamburger" onClick={()=>setMobileOpen(o=>!o)}
+          style={{background:"none",border:"none",color:"#8896aa",cursor:"pointer",
+            padding:"6px",display:"none",flexDirection:"column",gap:4}}>
+          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+        </button>
+
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+          <span style={{width:7,height:7,borderRadius:"50%",background:online?"#34d399":"#f87171",
+            boxShadow:`0 0 8px ${online?"#34d399":"#f87171"}`,flexShrink:0}}/>
+          <span style={{fontSize:11,color:"#4a5568",fontFamily:"monospace",display:online?"block":"none"}} className="eg-hide-sm">
+            {online?"ONLINE":"OFFLINE"}
+          </span>
+          {targets[0]&&<>
+            <span style={{color:"#2d3748",fontSize:14}}>/</span>
+            <span style={{fontSize:12,color:"#8896aa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {targets[0].name}
+            </span>
+          </>}
+          {last&&<span style={{fontSize:10,color:"#374458",marginLeft:4,flexShrink:0,
+            display:"none"}} className="eg-hide-sm">
+            {new Date(last).toLocaleString()}
+          </span>}
+        </div>
+
+        {crit>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",
+          background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,flexShrink:0}}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:"#f87171",animation:"blink 1.2s ease infinite"}}/>
+          <span style={{fontSize:10,color:"#f87171",fontWeight:700,fontFamily:"monospace",whiteSpace:"nowrap"}}>{crit} CRIT</span>
+        </div>}
+
+        <button onClick={scan} disabled={scanning}
+          style={{padding:"7px 14px",borderRadius:5,border:"none",cursor:"pointer",flexShrink:0,
+            background:scanning?"transparent":"linear-gradient(135deg,#0ea5e9,#6366f1)",
+            color:scanning?"#38bdf8":"#fff",outline:scanning?"1px solid #38bdf8":"none",
+            fontSize:11,fontWeight:700,letterSpacing:"0.06em",
+            display:"flex",alignItems:"center",gap:6,transition:"all 0.2s"}}>
+          {scanning?<><div style={{width:10,height:10,border:"2px solid #38bdf8",
+            borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+            <span className="eg-hide-sm">SCANNING</span></>
+          :<>▶ <span className="eg-hide-sm">SCAN</span></>}
+        </button>
+      </div>
+
+      {/* Main content */}
+      <main className="eg-main" style={{marginLeft:216,marginTop:52,padding:20,minHeight:"calc(100vh - 52px)"}}>
         {VIEWS[view]||VIEWS.dashboard}
       </main>
     </>

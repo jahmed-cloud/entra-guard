@@ -1,9 +1,13 @@
+import os, uuid, asyncio, logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.routers import targets, assessments, findings
-import os, uuid
+from app.auth.router import router as auth_router
+from app.auth.tracker import heartbeat_loop, get_instance_info
+
+log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,22 +33,28 @@ async def lifespan(app: FastAPI):
                 )
                 db.add(t)
                 await db.commit()
+                log.info(f"Auto-created target: {t.name}")
+
+    # Start telemetry heartbeat in background
+    asyncio.create_task(heartbeat_loop())
 
     yield
 
-app = FastAPI(title="EntraGuard API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="EntraGuard API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router,    prefix="/api/v1")
 app.include_router(targets.router, prefix="/api/v1")
 app.include_router(assessments.router, prefix="/api/v1")
 app.include_router(findings.router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", **get_instance_info()}
