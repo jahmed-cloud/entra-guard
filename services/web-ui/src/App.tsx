@@ -106,11 +106,12 @@ const NAVS = [
   {id:"remediation",icon:"⚙", l:"Remediation"},
   {id:"history",    icon:"◷", l:"Scan History"},
   {id:"exceptions", icon:"⊘", l:"Exceptions"},
+  {id:"users",      icon:"👤", l:"Users", adminOnly:true},
 ];
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 const AUTH_CONFIG_URL = "/api/v1/auth/config";
-const AUTH_LOGIN_URL  = "/api/v1/auth/login";
+const AUTH_LOGIN_URL  = "/api/v1/auth/login/extended";
 const AUTH_ME_URL     = "/api/v1/auth/me";
 const AUTH_LOGOUT_URL = "/api/v1/auth/logout";
 const MSAL_LOGIN_URL  = "/api/v1/auth/msal/login";
@@ -191,20 +192,28 @@ function LoginPage({ onLogin, config }) {
 
           {/* MSAL button */}
           {(tab === "msal" || (!config.local_admin_enabled && config.msal_enabled)) && (
-            <button onClick={msalLogin} style={{
-              width:"100%",padding:"12px 16px",borderRadius:8,border:"none",cursor:"pointer",
-              background:"#0ea5e9",color:"#fff",fontSize:14,fontWeight:600,
-              display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-              transition:"background 0.2s",
-            }}>
-              <svg width="18" height="18" viewBox="0 0 21 21" fill="currentColor">
-                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-              </svg>
-              Sign in with Microsoft
-            </button>
+            <div>
+              <button onClick={msalLogin} style={{
+                width:"100%",padding:"12px 16px",borderRadius:8,border:"none",cursor:"pointer",
+                background:"#0ea5e9",color:"#fff",fontSize:14,fontWeight:600,
+                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                transition:"background 0.2s",
+              }}>
+                <svg width="18" height="18" viewBox="0 0 21 21" fill="currentColor">
+                  <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                  <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                </svg>
+                Sign in with Microsoft
+              </button>
+              <div style={{marginTop:8,padding:"8px 12px",background:"rgba(251,191,36,0.08)",
+                border:"1px solid rgba(251,191,36,0.2)",borderRadius:6,fontSize:11,color:"#fbbf24"}}>
+                ⚠ Requires HTTPS. Add <code style={{fontFamily:"monospace",fontSize:10}}>
+                {window.location.origin}/api/v1/auth/callback</code> as a redirect URI in 
+                Azure Portal → App Registration → Authentication, and set up HTTPS for your app.
+              </div>
+            </div>
           )}
 
           {/* Local admin form */}
@@ -875,73 +884,487 @@ function Compliance({findings}) {
 
 // ─── Remediation ──────────────────────────────────────────────────────────────
 function Remediation({findings}) {
-  const fail=findings.filter(f=>f.status==="failed");
-  const byE={Low:[],Moderate:[],High:[]};
-  fail.forEach(f=>{const e=f.estimated_effort||"Moderate";(byE[e]=byE[e]||[]).push(f);});
-  const EM={Low:{l:"Quick Wins",c:"#34d399",d:"<1 hr"},Moderate:{l:"This Week",c:"#fcd34d",d:"1-7 days"},High:{l:"Project",c:"#fb923c",d:"Multi-week"}};
+  const fail = findings.filter(f=>f.status==="failed");
+  const [expanded, setExpanded] = React.useState(null);
+  const [effortFilter, setEffortFilter] = React.useState("All");
+
+  const groups = {
+    Low:      {label:"Quick Wins",    color:"#34d399", icon:"⚡", desc:"< 1 hour"},
+    Moderate: {label:"This Week",     color:"#fbbf24", icon:"📅", desc:"1–7 days"},
+    High:     {label:"Project Work",  color:"#f87171", icon:"🏗",  desc:"Multi-week"},
+  };
+
+  fail.forEach(f => {
+    const e = f.estimated_effort||"Moderate";
+    if(groups[e]) groups[e].items = [...(groups[e].items||[]), f];
+  });
+  Object.values(groups).forEach(g => {
+    g.items = (g.items||[]).sort((a,b)=>b.score-a.score);
+  });
+
+  const shown = effortFilter==="All" ? fail.sort((a,b)=>b.score-a.score)
+    : (groups[effortFilter]?.items||[]);
+
+  if (fail.length === 0) return (
+    <div style={{textAlign:"center",padding:80,animation:"fadeIn 0.3s ease"}}>
+      <div style={{fontSize:48,marginBottom:16}}>🎉</div>
+      <div style={{fontSize:18,fontWeight:700,color:"#34d399"}}>All checks passing</div>
+    </div>
+  );
+
   return (
-    <div style={{animation:"fadeIn 0.25s ease"}}>
-      <p style={{fontSize:12,color:"#4a5568",marginBottom:16,lineHeight:1.6}}>
-        Remediation tasks ordered by implementation effort — start with Quick Wins for maximum immediate risk reduction.
-      </p>
-      {["Low","Moderate","High"].map(e=>{
-        const items=(byE[e]||[]).sort((a,b)=>b.score-a.score); if(!items.length)return null;
-        const m=EM[e];
-        return (
-          <div key={e} style={{marginBottom:24}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,
-              padding:"8px 12px",background:"#1e293b",border:"1px solid #2d3748",borderRadius:5,
-              borderLeft:`3px solid ${m.c}`}}>
-              <span style={{fontWeight:700,color:m.c,fontSize:12,fontFamily:"monospace"}}>{m.l.toUpperCase()}</span>
-              <span style={{fontSize:10,color:"#4a5568"}}>{m.d}</span>
-              <span style={{marginLeft:"auto",fontSize:10,color:"#4a5568",fontFamily:"monospace"}}>{items.length} item{items.length!==1?"s":""}</span>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {items.map(f=>{
-                const r=REM[f.check_id];const sc=sev(f);
-                return (
-                  <div key={f.check_id} style={{background:"#1e293b",border:"1px solid #2d3748",
-                    borderRadius:6,padding:"14px 16px",borderLeft:`3px solid ${sc}`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-                      <span style={{fontFamily:"monospace",fontSize:9,color:"#4a5568"}}>{f.check_id}</span>
-                      <Badge label={f.severity} color={sc} small/>
-                      <div style={{width:70,marginLeft:"auto"}}><ScoreBar score={f.score}/></div>
-                    </div>
-                    <div style={{fontSize:13,fontWeight:600,color:"#d1d9e6",marginBottom:6}}>{r?.title||f.check_id}</div>
-                    {r?.risk&&<p style={{fontSize:11,color:"#5a6a7e",lineHeight:1.65,margin:"0 0 10px"}}>{r.risk}</p>}
-                    {r?.steps&&(
-                      <div style={{background:"#111827",border:"1px solid #2d3748",borderRadius:4,padding:"10px 12px"}}>
-                        <div style={{fontSize:9,color:"#34d399",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>HOW TO FIX</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                          {r.steps.map((s,i)=>(
-                            <div key={i} style={{display:"flex",gap:8,fontSize:11,color:"#5a6a7e",lineHeight:1.65}}>
-                              <span style={{color:"#38bdf8",fontWeight:700,flexShrink:0,fontFamily:"monospace"}}>{i+1}.</span>
-                              <span>{s}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {r.ref&&<a href={r.ref} target="_blank"
-                          style={{display:"inline-block",marginTop:8,fontSize:9,color:"#38bdf8",textDecoration:"none",fontFamily:"monospace"}}>
-                          ↗ learn.microsoft.com
-                        </a>}
-                      </div>
-                    )}
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}} className="eg-chart-row">
+        {Object.entries(groups).map(([key,g])=>{
+          const count = g.items?.length||0;
+          const pct = fail.length ? Math.round((count/fail.length)*100) : 0;
+          const r=16, circ=2*Math.PI*r;
+          return (
+            <button key={key}
+              onClick={()=>setEffortFilter(effortFilter===key?"All":key)}
+              style={{background:effortFilter===key?g.color+"15":"#1e293b",
+                border:`1px solid ${effortFilter===key?g.color:"#2d3748"}`,
+                borderRadius:8,padding:"14px 16px",cursor:"pointer",textAlign:"left",
+                transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{fontSize:20}}>{g.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:effortFilter===key?g.color:"#d1d9e6"}}>{g.label}</div>
+                  <div style={{fontSize:10,color:"#4a5568"}}>{g.desc}</div>
+                </div>
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r={r} fill="none" stroke="#2d3748" strokeWidth="4"/>
+                  <circle cx="20" cy="20" r={r} fill="none" stroke={g.color} strokeWidth="4"
+                    strokeLinecap="round" strokeDasharray={`${circ*pct/100} ${circ}`}
+                    transform="rotate(-90 20 20)" style={{transition:"stroke-dasharray 0.8s"}}/>
+                  <text x="20" y="24" textAnchor="middle" fontSize="9" fontWeight="700"
+                    fill={g.color} fontFamily="monospace">{pct}%</text>
+                </svg>
+              </div>
+              <div style={{fontSize:24,fontWeight:800,color:g.color}}>{count}
+                <span style={{fontSize:11,color:"#4a5568",fontWeight:400,marginLeft:6}}>
+                  finding{count!==1?"s":""}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filter bar */}
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+        <span style={{fontSize:11,color:"#4a5568"}}>Filter:</span>
+        {["All",...Object.keys(groups)].map(k=>(
+          <button key={k} onClick={()=>setEffortFilter(k)}
+            style={{padding:"4px 12px",borderRadius:20,border:"none",cursor:"pointer",
+              fontSize:11,fontWeight:effortFilter===k?700:400,
+              background:effortFilter===k?(k==="All"?"#38bdf820":groups[k]?.color+"20"):"transparent",
+              color:effortFilter===k?(k==="All"?"#38bdf8":groups[k]?.color||"#38bdf8"):"#4a5568"}}>
+            {k==="All"?`All (${fail.length})`:groups[k]?.label+` (${groups[k]?.items?.length||0})`}
+          </button>
+        ))}
+        <div style={{flex:1}}/>
+        <span style={{fontSize:10,color:"#374458",fontFamily:"monospace"}}>
+          {shown.length} items · click to expand
+        </span>
+      </div>
+
+      {/* Collapsed list — click to expand */}
+      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        {shown.map((f)=>{
+          const r = REM[f.check_id];
+          const sc = sev(f);
+          const effort = f.estimated_effort||"Moderate";
+          const g = groups[effort]||groups.Moderate;
+          const isOpen = expanded===f.check_id;
+          const hasContent = r?.steps?.length>0 || f.remediation_steps;
+
+          return (
+            <div key={f.check_id} style={{background:"#1e293b",
+              border:`1px solid ${isOpen?"#374458":"#2d3748"}`,
+              borderRadius:8,overflow:"hidden",
+              borderLeft:`3px solid ${sc}`,transition:"border-color 0.15s"}}>
+              {/* Always-visible header row — click to expand */}
+              <button onClick={()=>setExpanded(isOpen?null:f.check_id)}
+                style={{width:"100%",background:"none",border:"none",cursor:"pointer",
+                  padding:"12px 16px",textAlign:"left",
+                  display:"flex",alignItems:"center",gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"monospace",fontSize:9,color:"#374458"}}>{f.check_id}</span>
+                    <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
+                      background:sc+"18",color:sc,border:`1px solid ${sc}30`,fontWeight:700}}>{f.severity}</span>
+                    <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
+                      background:g.color+"12",color:g.color,border:`1px solid ${g.color}25`}}>
+                      {g.icon} {g.label}
+                    </span>
+                    {!hasContent&&<span style={{fontSize:9,color:"#374458"}}>· no steps available</span>}
                   </div>
-                );
-              })}
+                  <div style={{fontSize:13,fontWeight:600,color:"#d1d9e6",overflow:"hidden",
+                    textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {r?.title||f.check_id}
+                  </div>
+                </div>
+                {/* Score */}
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <div style={{width:50,height:4,background:"#111827",borderRadius:2}}>
+                    <div style={{height:"100%",borderRadius:2,background:sc,width:`${(f.score/10)*100}%`}}/>
+                  </div>
+                  <span style={{fontSize:11,fontWeight:800,color:sc,fontFamily:"monospace",minWidth:28}}>{f.score.toFixed(1)}</span>
+                </div>
+                {/* Chevron */}
+                <span style={{fontSize:12,color:"#374458",flexShrink:0,
+                  transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▼</span>
+              </button>
+
+              {/* Expanded content */}
+              {isOpen&&(
+                <div style={{borderTop:"1px solid #2d3748",padding:"12px 16px 14px",
+                  background:"#111827"}}>
+                  {hasContent ? (
+                    <>
+                      {/* Risk description */}
+                      {(r?.risk||f.risk_description)&&(
+                        <div style={{marginBottom:12}}>
+                          <div style={{fontSize:9,color:"#fbbf24",fontWeight:700,
+                            letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>WHY THIS MATTERS</div>
+                          <p style={{fontSize:12,color:"#8896aa",lineHeight:1.7,margin:0}}>
+                            {r?.risk||f.risk_description}
+                          </p>
+                        </div>
+                      )}
+                      {/* Steps */}
+                      <div style={{background:"#1e293b",borderRadius:6,padding:"10px 14px"}}>
+                        <div style={{fontSize:9,color:"#34d399",fontWeight:700,
+                          letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:10}}>ACTION REQUIRED</div>
+                        {r?.steps ? (
+                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                            {r.steps.map((s,i)=>(
+                              <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                                <div style={{width:18,height:18,borderRadius:"50%",
+                                  background:"#0ea5e918",border:"1px solid #0ea5e940",
+                                  display:"flex",alignItems:"center",justifyContent:"center",
+                                  fontSize:9,fontWeight:700,color:"#38bdf8",
+                                  flexShrink:0,fontFamily:"monospace"}}>{i+1}</div>
+                                <span style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,paddingTop:1}}>{s}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,margin:0}}>
+                            {f.remediation_steps}
+                          </p>
+                        )}
+                        {r?.ref&&(
+                          <a href={r.ref} target="_blank"
+                            style={{display:"inline-block",marginTop:10,fontSize:10,
+                              color:"#38bdf8",textDecoration:"none",fontFamily:"monospace"}}>
+                            ↗ Microsoft Documentation
+                          </a>
+                        )}
+                      </div>
+                      {/* Affected resources */}
+                      {f.affected_resources?.length>0&&(
+                        <div style={{marginTop:8,fontSize:10,color:"#374458",fontFamily:"monospace"}}>
+                          ⚠ {f.affected_resources.length} affected resource{f.affected_resources.length!==1?"s":""}
+                          {f.affected_resources[0]&&typeof f.affected_resources[0]==="object"&&
+                            ` — ${Object.values(f.affected_resources[0])[0]}`}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{padding:"12px 0"}}>
+                      <div style={{fontSize:9,color:"#374458",fontWeight:700,
+                        letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>REMEDIATION</div>
+                      <p style={{fontSize:12,color:"#64748b",lineHeight:1.65,margin:0}}>
+                        Review this control in the Microsoft Entra ID portal. Check the Findings tab
+                        for the raw evidence, then consult{" "}
+                        <a href="https://learn.microsoft.com/en-us/entra/identity/" target="_blank"
+                          style={{color:"#38bdf8"}}>Microsoft documentation</a>
+                        {" "}for remediation steps specific to{" "}<code style={{fontFamily:"monospace",fontSize:11,
+                          color:"#8896aa"}}>{f.check_id}</code>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        );
-      })}
-      {fail.length===0&&<div style={{textAlign:"center",padding:60}}>
-        <div style={{fontSize:36,marginBottom:12}}>🎉</div>
-        <div style={{color:"#34d399",fontSize:14,fontWeight:700}}>All checks passing — no remediation required</div>
-      </div>}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-// ─── History ──────────────────────────────────────────────────────────────────
+function Users({authUser}) {
+  const [users, setUsers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+  const [editUser, setEditUser] = React.useState(null);
+  const [form, setForm] = React.useState({username:"",name:"",password:"",role:"viewer"});
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const [msg, setMsg] = React.useState("");
+
+  const isAdmin = authUser?.role==="admin" || authUser?.auth_type==="local";
+
+  const load = async () => {
+    try {
+      const r = await authFetch("/api/v1/users");
+
+      if (!r.ok) {
+        const txt = await r.text();
+        throw new Error(txt);
+      }
+
+      const data = await r.json();
+      setUsers(data.items || []);
+    } catch (e) {
+      console.error("Load users failed:", e);
+      setErr("Could not load users. Admin access required.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(()=>{ load(); },[]);
+
+  const openCreate = () => {
+    setForm({username:"",name:"",password:"",role:"viewer"});
+    setEditUser(null); setErr(""); setShowForm(true);
+  };
+
+  const openEdit = (u) => {
+    setForm({username:u.username,name:u.name,password:"",role:u.role});
+    setEditUser(u); setErr(""); setShowForm(true);
+  };
+
+  const save = async () => {
+    setSaving(true); setErr("");
+    try {
+      const token = getStoredToken();
+      const headers = {"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})};
+      if (editUser) {
+        const body = {};
+        if(form.name!==editUser.name) body.name=form.name;
+        if(form.password) body.password=form.password;
+        if(form.role!==editUser.role) body.role=form.role;
+        const r = await fetch(`/api/v1/users/${editUser.username}`,{method:"PUT",headers,body:JSON.stringify(body)});
+        if(!r.ok){const d=await r.json();throw new Error(d.detail||"Update failed");}
+      } else {
+        if(!form.username||!form.name||!form.password) throw new Error("All fields required");
+        const r = await fetch("/api/v1/users",{method:"POST",headers,body:JSON.stringify(form)});
+        if(!r.ok){const d=await r.json();throw new Error(d.detail||"Create failed");}
+      }
+      setShowForm(false); setMsg(editUser?"User updated":"User created"); load();
+      setTimeout(()=>setMsg(""),3000);
+    } catch(e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const deleteUser = async (username) => {
+    if(!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    try {
+      const token = getStoredToken();
+      const r = await fetch(`/api/v1/users/${username}`,{
+        method:"DELETE",headers:token?{"Authorization":"Bearer "+token}:{}
+      });
+      if(!r.ok){const d=await r.json();throw new Error(d.detail||"Delete failed");}
+      setMsg("User deleted"); load(); setTimeout(()=>setMsg(""),3000);
+    } catch(e) { setErr(e.message); }
+  };
+
+  const toggleActive = async (u) => {
+    try {
+      const token = getStoredToken();
+      const r = await fetch(`/api/v1/users/${u.username}`,{
+        method:"PUT",
+        headers:{"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})},
+        body:JSON.stringify({active:!u.active})
+      });
+      if(!r.ok){const d=await r.json();throw new Error(d.detail||"Update failed");}
+      load();
+    } catch(e) { setErr(e.message); }
+  };
+
+  const ROLE_COLOR = {admin:"#f87171", viewer:"#38bdf8"};
+
+  return (
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:700,color:"#d1d9e6"}}>User Management</div>
+          <div style={{fontSize:11,color:"#4a5568",marginTop:2}}>
+            Manage who can access this EntraGuard instance. Auth must be enabled in .env.
+          </div>
+        </div>
+        <div style={{flex:1}}/>
+        {isAdmin&&(
+          <button onClick={openCreate}
+            style={{padding:"8px 16px",background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+              border:"none",borderRadius:6,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            + Add User
+          </button>
+        )}
+      </div>
+
+      {/* Notices */}
+      {msg&&<div style={{marginBottom:12,padding:"8px 14px",background:"rgba(52,211,153,0.1)",
+        border:"1px solid rgba(52,211,153,0.3)",borderRadius:6,fontSize:12,color:"#34d399"}}>{msg}</div>}
+      {err&&<div style={{marginBottom:12,padding:"8px 14px",background:"rgba(248,113,113,0.1)",
+        border:"1px solid rgba(248,113,113,0.3)",borderRadius:6,fontSize:12,color:"#f87171"}}>{err}</div>}
+
+      {/* Info banner if auth is disabled */}
+      <div style={{marginBottom:16,padding:"10px 14px",background:"rgba(251,191,36,0.06)",
+        border:"1px solid rgba(251,191,36,0.2)",borderRadius:6,fontSize:11,color:"#fbbf24"}}>
+        ℹ Users added here can sign in when <code style={{fontFamily:"monospace"}}>AUTH_ENABLED=true</code> is set in .env.
+        The built-in admin from <code style={{fontFamily:"monospace"}}>LOCAL_ADMIN_USERNAME/PASSWORD</code> always has access.
+      </div>
+
+      {/* User table */}
+      {loading ? (
+        <div style={{textAlign:"center",padding:40,color:"#4a5568"}}>Loading users…</div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {users.map(u=>(
+            <div key={u.username} style={{background:"#1e293b",border:"1px solid #2d3748",
+              borderRadius:8,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,
+              opacity:u.active?1:0.5}}>
+              {/* Avatar */}
+              <div style={{width:36,height:36,borderRadius:"50%",
+                background:`linear-gradient(135deg,${ROLE_COLOR[u.role]||"#64748b"}30,${ROLE_COLOR[u.role]||"#64748b"}15)`,
+                border:`1px solid ${ROLE_COLOR[u.role]||"#64748b"}40`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:13,fontWeight:700,color:ROLE_COLOR[u.role]||"#64748b",flexShrink:0}}>
+                {(u.name||u.username).slice(0,1).toUpperCase()}
+              </div>
+              {/* Info */}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:"#d1d9e6"}}>{u.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
+                  <span style={{fontFamily:"monospace",fontSize:10,color:"#4a5568"}}>{u.username}</span>
+                  <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
+                    background:ROLE_COLOR[u.role]+"18",color:ROLE_COLOR[u.role],
+                    border:`1px solid ${ROLE_COLOR[u.role]}30`,fontWeight:700,textTransform:"uppercase"}}>
+                    {u.role}
+                  </span>
+                  {u.builtin&&<span style={{fontSize:9,color:"#374458"}}>Built-in</span>}
+                  {!u.active&&<span style={{fontSize:9,color:"#f87171"}}>Disabled</span>}
+                </div>
+              </div>
+              {/* Actions */}
+              {isAdmin&&!u.builtin&&(
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={()=>toggleActive(u)}
+                    style={{padding:"4px 10px",background:"transparent",
+                      border:`1px solid ${u.active?"#2d3748":"#34d39940"}`,
+                      color:u.active?"#64748b":"#34d399",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    {u.active?"Disable":"Enable"}
+                  </button>
+                  <button onClick={()=>openEdit(u)}
+                    style={{padding:"4px 10px",background:"transparent",
+                      border:"1px solid #2d3748",color:"#8896aa",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    Edit
+                  </button>
+                  <button onClick={()=>deleteUser(u.username)}
+                    style={{padding:"4px 10px",background:"transparent",
+                      border:"1px solid #f8717140",color:"#f87171",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {users.length===0&&(
+            <div style={{textAlign:"center",padding:40,color:"#374458",fontSize:13}}>
+              No additional users. Click Add User to create one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      {showForm&&(
+        <div style={{position:"fixed",inset:0,background:"#00000090",display:"flex",
+          alignItems:"center",justifyContent:"center",zIndex:999}}
+          onClick={()=>setShowForm(false)}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:"#1e293b",border:"1px solid #2d3748",borderRadius:12,
+              width:"min(440px,95vw)",padding:24}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#d1d9e6",marginBottom:20}}>
+              {editUser?"Edit User":"Add New User"}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {!editUser&&(
+                <div>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>USERNAME</div>
+                  <input value={form.username} onChange={e=>setForm({...form,username:e.target.value})}
+                    placeholder="john.smith"
+                    style={{width:"100%",padding:"9px 12px",background:"#111827",
+                      border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                      boxSizing:"border-box"}}/>
+                </div>
+              )}
+              <div>
+                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>DISPLAY NAME</div>
+                <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+                  placeholder="John Smith"
+                  style={{width:"100%",padding:"9px 12px",background:"#111827",
+                    border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                    boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>
+                  {editUser?"NEW PASSWORD (leave blank to keep current)":"PASSWORD"}
+                </div>
+                <input type="password" value={form.password}
+                  onChange={e=>setForm({...form,password:e.target.value})}
+                  placeholder={editUser?"••••••••  (unchanged)":"Minimum 8 characters"}
+                  style={{width:"100%",padding:"9px 12px",background:"#111827",
+                    border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                    boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,color:"#64748b",marginBottom:8,fontWeight:500}}>ROLE</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[["admin","Admin","Full access — can scan, manage users, and view all findings"],
+                    ["viewer","Viewer","Read-only — can view findings and reports but cannot scan or manage users"]
+                  ].map(([val,label,desc])=>(
+                    <button key={val} onClick={()=>setForm({...form,role:val})}
+                      style={{padding:"10px 12px",textAlign:"left",borderRadius:6,cursor:"pointer",
+                        background:form.role===val?ROLE_COLOR[val]+"18":"#111827",
+                        border:`2px solid ${form.role===val?ROLE_COLOR[val]:"#2d3748"}`,
+                        color:form.role===val?ROLE_COLOR[val]:"#64748b",transition:"all 0.15s"}}>
+                      <div style={{fontWeight:700,fontSize:12}}>{label}</div>
+                      <div style={{fontSize:10,marginTop:3,lineHeight:1.4,
+                        color:form.role===val?ROLE_COLOR[val]+"cc":"#374458"}}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {err&&<div style={{fontSize:12,color:"#f87171",padding:"8px 12px",
+                background:"rgba(248,113,113,0.08)",borderRadius:6}}>{err}</div>}
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+                <button onClick={()=>setShowForm(false)}
+                  style={{padding:"8px 16px",background:"transparent",border:"1px solid #2d3748",
+                    color:"#64748b",borderRadius:6,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                <button onClick={save} disabled={saving}
+                  style={{padding:"8px 20px",background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+                    border:"none",color:"#fff",borderRadius:6,fontSize:12,fontWeight:600,
+                    cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1}}>
+                  {saving?"Saving…":editUser?"Save Changes":"Create User"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function History({runs}) {
   return (
     <div style={{animation:"fadeIn 0.25s ease",display:"flex",flexDirection:"column",gap:4}}>
@@ -1244,6 +1667,7 @@ export default function App() {
     remediation:<Remediation findings={findings}/>,
     history:<History runs={runs}/>,
     exceptions:<Exceptions findings={findings}/>,
+    users:<Users authUser={authUser}/>,
   };
 
   // Loading
@@ -1370,8 +1794,48 @@ export default function App() {
       </div>
 
       {/* Main content */}
-      <main className="eg-main" style={{marginLeft:216,marginTop:52,padding:20,minHeight:"calc(100vh - 52px)"}}>
-        {VIEWS[view]||VIEWS.dashboard}
+      <main className="eg-main" style={{marginLeft:216,marginTop:52,padding:20,
+        minHeight:"calc(100vh - 52px)",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:1}}>{VIEWS[view]||VIEWS.dashboard}</div>
+        {/* Footer */}
+        <footer style={{marginTop:40,paddingTop:20,borderTop:"1px solid #1e293b",
+          display:"flex",alignItems:"center",justifyContent:"space-between",
+          flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:22,height:22,borderRadius:5,
+                background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:9,fontWeight:800,color:"#fff"}}>EG</div>
+              <span style={{fontSize:11,fontWeight:600,color:"#4a5568"}}>EntraGuard v2.0</span>
+            </div>
+            <span style={{fontSize:10,color:"#2d3748"}}>|</span>
+            <span style={{fontSize:10,color:"#374458"}}>Azure Identity Security Posture Management</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+            {[
+              ["GitHub","https://github.com/jahmed-cloud/entra-guard"],
+              ["Docker Hub","https://hub.docker.com/r/jahmed22/entra-guard-api"],
+              ["Docs","https://github.com/jahmed-cloud/entra-guard#readme"],
+              ["Report Issue","https://github.com/jahmed-cloud/entra-guard/issues"],
+              ["Microsoft Graph","https://learn.microsoft.com/en-us/graph/overview"],
+            ].map(([l,u])=>(
+              <a key={l} href={u} target="_blank" style={{fontSize:10,color:"#374458",
+                textDecoration:"none",transition:"color 0.15s"}}
+                onMouseOver={e=>e.target.style.color="#38bdf8"}
+                onMouseOut={e=>e.target.style.color="#374458"}>{l}</a>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:10,color:"#2d3748"}}>Built by</span>
+            <a href="mailto:iam@jahmed.cloud"
+              style={{fontSize:10,color:"#374458",textDecoration:"none"}}
+              onMouseOver={e=>e.target.style.color="#38bdf8"}
+              onMouseOut={e=>e.target.style.color="#374458"}>Junaid Ahmed</a>
+            <span style={{fontSize:10,color:"#2d3748"}}>·</span>
+            <span style={{fontSize:10,color:"#2d3748"}}>MIT License</span>
+          </div>
+        </footer>
       </main>
     </>
   );

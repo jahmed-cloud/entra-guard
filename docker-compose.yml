@@ -11,8 +11,8 @@ services:
     container_name: entra-guard-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       ${POSTGRES_DB:-cspm}
-      POSTGRES_USER:     ${POSTGRES_USER:-cspm_user}
+      POSTGRES_DB: ${POSTGRES_DB:-cspm}
+      POSTGRES_USER: ${POSTGRES_USER:-cspm_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -21,7 +21,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-    networks: [internal]
+    networks:
+      - internal
 
   redis:
     image: redis:7-alpine
@@ -33,8 +34,10 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
+      timeout: 3s
       retries: 10
-    networks: [internal]
+    networks:
+      - internal
 
   api:
     build:
@@ -45,29 +48,38 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL:          postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL:             redis://redis:6379/0
-      CELERY_BROKER_URL:     redis://redis:6379/1
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
-      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
-      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
-      ENTRA_TENANT_ID:       ${AZURE_TENANT_ID}
-      ENTRA_CLIENT_ID:       ${AZURE_CLIENT_ID}
-      ENTRA_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
-      SECRET_KEY:            ${SECRET_KEY}
-      TARGET_NAME:           ${TARGET_NAME:-My Azure Tenant}
-      AUTH_ENABLED:          ${AUTH_ENABLED:-false}
-      LOCAL_ADMIN_USERNAME:  ${LOCAL_ADMIN_USERNAME:-admin}
-      LOCAL_ADMIN_PASSWORD:  ${LOCAL_ADMIN_PASSWORD:-}
-      JWT_EXPIRE_HOURS:      ${JWT_EXPIRE_HOURS:-8}
-      APP_BASE_URL:          ${APP_BASE_URL:-http://localhost:3000}
-      INSTANCE_NAME:         ${INSTANCE_NAME:-EntraGuard}
-      TELEMETRY_ENABLED:     ${TELEMETRY_ENABLED:-false}
+
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
+      ENTRA_TENANT_ID: ${AZURE_TENANT_ID}
+      ENTRA_CLIENT_ID: ${AZURE_CLIENT_ID}
+      ENTRA_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
+      SECRET_KEY: ${SECRET_KEY:-changeme}
+      TARGET_NAME: ${TARGET_NAME:-My Azure Tenant}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      LOCAL_ADMIN_USERNAME: ${LOCAL_ADMIN_USERNAME:-admin}
+      LOCAL_ADMIN_PASSWORD: ${LOCAL_ADMIN_PASSWORD:-}
+      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-8}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      INSTANCE_NAME: ${INSTANCE_NAME:-EntraGuard}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+
     depends_on:
-      postgres: {condition: service_healthy}
-      redis:    {condition: service_healthy}
-    networks: [internal, external]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - internal
+      - external
 
   assessment-engine:
     build:
@@ -76,20 +88,28 @@ services:
     container_name: entra-guard-worker
     restart: unless-stopped
     environment:
-      DATABASE_URL:          postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL:             redis://redis:6379/0
-      CELERY_BROKER_URL:     redis://redis:6379/1
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
-      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
-      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
-      ENTRA_TENANT_ID:       ${AZURE_TENANT_ID}
-      ENTRA_CLIENT_ID:       ${AZURE_CLIENT_ID}
-      ENTRA_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
+      ENTRA_TENANT_ID: ${AZURE_TENANT_ID}
+      ENTRA_CLIENT_ID: ${AZURE_CLIENT_ID}
+      ENTRA_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
     depends_on:
-      postgres: {condition: service_healthy}
-      redis:    {condition: service_healthy}
-    networks: [internal, external]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - internal
+      - external
 
   scheduler:
     build:
@@ -98,18 +118,26 @@ services:
     container_name: entra-guard-scheduler
     restart: unless-stopped
     command: celery -A app.tasks beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+
     environment:
-      DATABASE_URL:          postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL:             redis://redis:6379/0
-      CELERY_BROKER_URL:     redis://redis:6379/1
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      AZURE_TENANT_ID:       ${AZURE_TENANT_ID}
-      AZURE_CLIENT_ID:       ${AZURE_CLIENT_ID}
-      AZURE_CLIENT_SECRET:   ${AZURE_CLIENT_SECRET}
+
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
     depends_on:
-      postgres: {condition: service_healthy}
-      redis:    {condition: service_healthy}
-    networks: [internal, external]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - internal
+      - external
 
   web-ui:
     build:
@@ -121,12 +149,15 @@ services:
       - "${PORT:-3000}:80"
     depends_on:
       - api
-    networks: [internal, external]
+    networks:
+      - internal
+      - external
 
 networks:
   internal:
     driver: bridge
     internal: true
+
   external:
     driver: bridge
 
