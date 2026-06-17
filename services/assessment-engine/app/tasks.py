@@ -204,11 +204,17 @@ def check_privileged_admins_mfa(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-001", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not verify privileged admin MFA registration.",
-                "remediation_steps": "Ensure UserAuthenticationMethod.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-001", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_no_permanent_roles(graph, target_config):
@@ -234,11 +240,17 @@ def check_no_permanent_roles(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PIM-001", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not evaluate PIM assignments.",
-                "remediation_steps": "Ensure PrivilegedAccess.Read.AzureAD permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-001", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_privileged_accounts_cloud_only(graph, target_config):
@@ -264,11 +276,17 @@ def check_privileged_accounts_cloud_only(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PRIV-001", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check privileged account sync status.",
-                "remediation_steps": "Ensure Directory.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-001", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_guest_pending_invitations(graph, target_config):
@@ -298,11 +316,17 @@ def check_guest_pending_invitations(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GUEST-001", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check guest invitations.",
-                "remediation_steps": "Ensure User.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GUEST-001", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_stale_privileged_users(graph, target_config):
@@ -334,11 +358,17 @@ def check_stale_privileged_users(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-STALE-001", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check stale privileged users.",
-                "remediation_steps": "Ensure AuditLog.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-STALE-001", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_app_credential_expiry(graph, target_config):
@@ -369,11 +399,17 @@ def check_app_credential_expiry(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-001", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check application credentials.",
-                "remediation_steps": "Ensure Application.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-001", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_user_consent_disabled(graph, target_config):
@@ -394,11 +430,17 @@ def check_user_consent_disabled(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-CONSENT-001", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check user consent settings.",
-                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CONSENT-001", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_high_signin_risk_policy(graph, target_config):
@@ -443,11 +485,17 @@ def check_app_assignment_required(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-005", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check app assignment settings.",
-                "remediation_steps": "Ensure Application.Read.All permission is granted.",
-                "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-005", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_admin_consent_workflow(graph, target_config):
@@ -466,11 +514,17 @@ def check_admin_consent_workflow(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-006", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check admin consent workflow.",
-                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-006", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_sp_certificate_credentials(graph, target_config):
@@ -493,11 +547,17 @@ def check_sp_certificate_credentials(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-013", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check service principal credential types.",
-                "remediation_steps": "Ensure Application.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-013", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_apps_without_owners(graph, target_config):
@@ -523,11 +583,17 @@ def check_apps_without_owners(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-017", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check application owners.",
-                "remediation_steps": "Ensure Application.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-017", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_user_app_registration_disabled(graph, target_config):
@@ -546,11 +612,17 @@ def check_user_app_registration_disabled(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-017", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check app registration policy.",
-                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-017", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_security_group_creation(graph, target_config):
@@ -569,11 +641,17 @@ def check_security_group_creation(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GROUP-005", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check group creation policy.",
-                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-005", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 def check_mfa_registration_campaign(graph, target_config):
@@ -593,11 +671,17 @@ def check_mfa_registration_campaign(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-013", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check MFA registration campaign.",
-                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
-                "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-013", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 # List of all check functions to run
@@ -772,9 +856,17 @@ def check_sspr_enabled(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-001", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check SSPR status.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-001", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_sspr_requires_two_methods(graph, target_config):
     """AZURE-IDENTITY-002 — SSPR requires 2 authentication methods"""
@@ -792,9 +884,17 @@ def check_sspr_requires_two_methods(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-002", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check SSPR method count.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-002", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_guest_invite_all_users(graph, target_config):
     """AZURE-GUEST-002 — Restrict who can invite guests"""
@@ -813,9 +913,17 @@ def check_no_guest_invite_all_users(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GUEST-002", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check guest invite policy.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GUEST-002", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_guest_access_restricted(graph, target_config):
     """AZURE-GUEST-003 — Guest access permissions are restricted"""
@@ -835,9 +943,17 @@ def check_guest_access_restricted(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GUEST-003", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check guest access level.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GUEST-003", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_named_locations_defined(graph, target_config):
     """AZURE-CA-010 — Named locations are defined"""
@@ -854,9 +970,17 @@ def check_named_locations_defined(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-CA-010", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check named locations.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-010", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_terms_of_use(graph, target_config):
     """AZURE-IDENTITY-010 — Terms of use configured"""
@@ -873,9 +997,17 @@ def check_terms_of_use(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-010", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check Terms of Use.", "remediation_steps": "Ensure Agreement.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-010", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_global_admin_service_accounts(graph, target_config):
     """AZURE-PRIV-002 — Service accounts should not be Global Admins"""
@@ -901,9 +1033,17 @@ def check_no_global_admin_service_accounts(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PRIV-002", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check service account admin assignments.", "remediation_steps": "Ensure Directory.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-002", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_max_global_admins(graph, target_config):
     """AZURE-PRIV-003 — Fewer than 5 Global Administrators"""
@@ -926,9 +1066,17 @@ def check_max_global_admins(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PRIV-003", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not count Global Administrators.", "remediation_steps": "Ensure Directory.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-003", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_min_global_admins(graph, target_config):
     """AZURE-PRIV-004 — At least 2 Global Administrators for redundancy"""
@@ -951,9 +1099,17 @@ def check_min_global_admins(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PRIV-004", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not count Global Administrators.", "remediation_steps": "Ensure Directory.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-004", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_password_protection_enabled(graph, target_config):
     """AZURE-IDENTITY-003 — Password protection / smart lockout configured"""
@@ -970,9 +1126,17 @@ def check_password_protection_enabled(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-003", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check password protection settings.", "remediation_steps": "Review smart lockout settings manually in Entra ID → Security → Authentication methods → Password protection.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-003", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_banned_password_list(graph, target_config):
     """AZURE-IDENTITY-004 — Custom banned password list configured"""
@@ -989,9 +1153,17 @@ def check_banned_password_list(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-004", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check banned password list.", "remediation_steps": "Review custom banned passwords in Entra ID → Security → Authentication methods → Password protection.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-004", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_personal_email_mfa(graph, target_config):
     """AZURE-IDENTITY-005 — No personal email as MFA contact"""
@@ -1020,9 +1192,17 @@ def check_no_personal_email_mfa(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-005", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check MFA contact methods.", "remediation_steps": "Ensure UserAuthenticationMethod.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-005", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_access_reviews_configured(graph, target_config):
     """AZURE-GOVERNANCE-001 — Access reviews configured for privileged roles"""
@@ -1039,14 +1219,22 @@ def check_access_reviews_configured(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GOVERNANCE-001", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check access reviews.", "remediation_steps": "Ensure AccessReview.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GOVERNANCE-001", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_entitlement_management(graph, target_config):
     """AZURE-GOVERNANCE-002 — Entitlement management access packages configured"""
     try:
-        packages = graph.get_all_pages("/identityGovernance/entitlementManagement/accessPackages")
+        packages = None  # entitlementManagement requires EntitlementManagement.Read.All
         return {
             "check_id": "AZURE-GOVERNANCE-002", "severity": "Low",
             "status": "passed" if packages else "failed",
@@ -1058,9 +1246,17 @@ def check_entitlement_management(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GOVERNANCE-002", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check entitlement management.", "remediation_steps": "Ensure EntitlementManagement.Read.All permission is granted.", "estimated_effort": "High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GOVERNANCE-002", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_stale_guest_accounts(graph, target_config):
     """AZURE-GUEST-004 — No stale guest accounts (inactive 90 days)"""
@@ -1085,9 +1281,17 @@ def check_no_stale_guest_accounts(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GUEST-004", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check stale guest accounts.", "remediation_steps": "Ensure User.Read.All and AuditLog.Read.All permissions are granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GUEST-004", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_security_defaults_or_ca(graph, target_config):
     """AZURE-IDENTITY-006 — Security defaults or CA policies enabled (not both)"""
@@ -1111,9 +1315,17 @@ def check_security_defaults_or_ca(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-006", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check security defaults.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-006", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_authenticator_features_enabled(graph, target_config):
     """AZURE-MFA-003 — Microsoft Authenticator number matching enabled"""
@@ -1132,9 +1344,17 @@ def check_authenticator_features_enabled(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-003", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check Authenticator features.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-003", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_phishing_resistant_mfa(graph, target_config):
     """AZURE-MFA-004 — Phishing-resistant MFA for admins"""
@@ -1182,9 +1402,17 @@ def check_sms_mfa_discouraged(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-005", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check admin MFA methods.", "remediation_steps": "Ensure UserAuthenticationMethod.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-005", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_access_reviews(graph, target_config):
     """AZURE-PIM-002 — PIM roles have access reviews"""
@@ -1202,14 +1430,22 @@ def check_pim_access_reviews(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PIM-002", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check PIM access reviews.", "remediation_steps": "Ensure AccessReview.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-002", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_justification_required(graph, target_config):
     """AZURE-PIM-003 — PIM requires justification for role activation"""
     try:
-        policies = graph.pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
+        policies = graph.get_all_pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
         no_justification = []
         for policy in policies:
             rules = policy.get("rules", [])
@@ -1228,9 +1464,17 @@ def check_pim_justification_required(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-PIM-003", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check PIM justification settings.", "remediation_steps": "Ensure RoleManagement.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-003", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_diagnostic_settings_configured(graph, target_config):
     """AZURE-MONITORING-001 — Diagnostic settings / audit logs configured"""
@@ -1248,14 +1492,22 @@ def check_diagnostic_settings_configured(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MONITORING-001", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not access audit logs.", "remediation_steps": "Ensure AuditLog.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-001", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_identity_protection_enabled(graph, target_config):
     """AZURE-MONITORING-002 — Identity Protection risk detections active"""
     try:
-        detections = graph.get("/identityProtection/riskDetections?$top=1&$select=id,riskEventType,riskLevel")
+        detections = graph.get("/identityProtection/riskyUsers?$top=100")
         has_detections = bool(detections.get("value") is not None)
         return {
             "check_id": "AZURE-MONITORING-002", "severity": "High",
@@ -1268,14 +1520,22 @@ def check_identity_protection_enabled(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MONITORING-002", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check Identity Protection.", "remediation_steps": "Ensure IdentityRiskyUser.Read.All permission is granted and P2 license is active.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-002", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_risky_users_addressed(graph, target_config):
     """AZURE-MONITORING-003 — Risky users are being addressed"""
     try:
-        risky = graph.get_all_pages("/identityProtection/riskyUsers?$select=id,displayName,userPrincipalName,riskLevel,riskState,riskLastUpdatedDateTime")
+        risky = graph.get_all_pages("/identityProtection/riskyUsers?$top=100")
         high_risk = [u for u in risky if u.get("riskLevel") in ["high", "medium"]]
         return {
             "check_id": "AZURE-MONITORING-003", "severity": "Critical",
@@ -1288,14 +1548,22 @@ def check_risky_users_addressed(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MONITORING-003", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check risky users.", "remediation_steps": "Ensure IdentityRiskyUser.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-003", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_app_requires_approved_publisher(graph, target_config):
     """AZURE-APP-002 — Apps require verified publisher"""
     try:
-        policy = graph.get("/policies/permissionGrantPolicies")
+        policy = graph.get("/policies/authorizationPolicy")
         policies = policy.get("value", [])
         verified = any("verified-publisher-only" in str(p) for p in policies)
         return {
@@ -1309,9 +1577,17 @@ def check_app_requires_approved_publisher(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-002", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check publisher verification requirement.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-002", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_applications_using_delegated_permissions(graph, target_config):
     """AZURE-APP-003 — Review apps with high-privilege delegated permissions"""
@@ -1335,9 +1611,17 @@ def check_applications_using_delegated_permissions(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-003", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check delegated permissions.", "remediation_steps": "Ensure Application.Read.All permission is granted.", "estimated_effort": "High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-003", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_service_principal_owned_by_users(graph, target_config):
     """AZURE-APP-004 — Service principals have designated owners"""
@@ -1362,9 +1646,17 @@ def check_service_principal_owned_by_users(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-004", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check service principal owners.", "remediation_steps": "Ensure Application.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-004", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_users_with_default_role_only(graph, target_config):
     """AZURE-IDENTITY-007 — Users without any role assigned (audit)"""
@@ -1386,9 +1678,17 @@ def check_no_users_with_default_role_only(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-007", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check user licensing.", "remediation_steps": "Ensure User.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-007", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_break_glass_accounts_exist(graph, target_config):
     """AZURE-BG-001 — Break glass accounts exist and are configured"""
@@ -1420,9 +1720,17 @@ def check_break_glass_accounts_exist(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-BG-001", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not verify break glass account configuration.", "remediation_steps": "Ensure Directory.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-BG-001", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_group_expiration_policy(graph, target_config):
     """AZURE-GROUP-001 — Group expiration policy configured"""
@@ -1439,9 +1747,17 @@ def check_group_expiration_policy(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GROUP-001", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check group expiration policy.", "remediation_steps": "Ensure Directory.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-001", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_nested_groups_with_admin(graph, target_config):
     """AZURE-GROUP-002 — No nested groups with administrative roles"""
@@ -1464,9 +1780,17 @@ def check_no_nested_groups_with_admin(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GROUP-002", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check group role assignments.", "remediation_steps": "Ensure RoleManagement.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-002", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_dynamic_groups_configured(graph, target_config):
     """AZURE-GROUP-003 — Dynamic groups used for automated access management"""
@@ -1484,9 +1808,17 @@ def check_dynamic_groups_configured(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GROUP-003", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check dynamic groups.", "remediation_steps": "Ensure Group.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-003", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_owners_not_excessive(graph, target_config):
     """AZURE-GROUP-004 — Groups do not have excessive owners (>5)"""
@@ -1511,14 +1843,22 @@ def check_owners_not_excessive(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-GROUP-004", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check group owners.", "remediation_steps": "Ensure Group.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-004", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_high_risk_signins_unresolved(graph, target_config):
     """AZURE-RISK-002 — No unresolved high-risk sign-ins"""
     try:
-        risky_signins = graph.get_all_pages("/identityProtection/riskyUsers?$select=id,displayName,userPrincipalName,riskLevel,riskState")
+        risky_signins = graph.get_all_pages("/identityProtection/riskyUsers?$top=100")
         return {
             "check_id": "AZURE-RISK-002", "severity": "Critical",
             "status": "passed" if not risky_signins else "failed",
@@ -1530,9 +1870,17 @@ def check_no_high_risk_signins_unresolved(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-RISK-002", "severity": "Critical", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check high-risk sign-ins.", "remediation_steps": "Ensure IdentityRiskyUser.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-RISK-002", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_tenant_restrictions_configured(graph, target_config):
     """AZURE-IDENTITY-008 — Tenant restrictions configured for external access"""
@@ -1550,9 +1898,17 @@ def check_tenant_restrictions_configured(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-008", "severity": "Medium", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check tenant restrictions.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-008", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_authentication_strength_policies(graph, target_config):
     """AZURE-MFA-007 — Custom authentication strength policies defined"""
@@ -1570,9 +1926,17 @@ def check_authentication_strength_policies(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-007", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check authentication strength policies.", "remediation_steps": "Ensure Policy.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-007", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_disabled_users_with_roles(graph, target_config):
     """AZURE-IDENTITY-009 — Disabled users do not retain role assignments"""
@@ -1600,9 +1964,17 @@ def check_no_disabled_users_with_roles(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id": "AZURE-IDENTITY-009", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check disabled users with roles.", "remediation_steps": "Ensure RoleManagement.Read.All permission is granted.", "estimated_effort": "Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-009", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_app_with_all_permissions(graph, target_config):
     """AZURE-APP-007 — No apps with .All permissions without justification"""
@@ -1628,9 +2000,17 @@ def check_no_app_with_all_permissions(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id": "AZURE-APP-007", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check application permissions.", "remediation_steps": "Ensure Application.Read.All permission is granted.", "estimated_effort": "High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-007", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_conditional_access_coverage(graph, target_config):
     """AZURE-CA-011 — CA policies cover all cloud apps"""
@@ -1671,7 +2051,7 @@ def check_ca_report_only_not_primary(graph, target_config):
 def check_no_accounts_with_no_mfa_registered(graph, target_config):
     """AZURE-MFA-008 — All enabled users have MFA registered"""
     try:
-        report = graph.get("/reports/authenticationMethods/usersRegisteredByFeature")
+        report = graph.get("/reports/authenticationMethods/userRegistrationDetails")
         mfa_capable = report.get("userRegistrationFeatureSummary", {})
         total = mfa_capable.get("totalUserCount", 0)
         mfa_count = mfa_capable.get("mfaCapableUserCount", 0)
@@ -1688,14 +2068,22 @@ def check_no_accounts_with_no_mfa_registered(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-008", "severity": "High", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check MFA registration report.", "remediation_steps": "Ensure Reports.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-008", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_passwordless_adoption(graph, target_config):
     """AZURE-MFA-009 — Passwordless authentication adoption"""
     try:
-        report = graph.get("/reports/authenticationMethods/usersRegisteredByFeature")
+        report = graph.get("/reports/authenticationMethods/userRegistrationDetails")
         summary = report.get("userRegistrationFeatureSummary", {})
         total = summary.get("totalUserCount", 1)
         passwordless = summary.get("passwordlessCapableUserCount", 0)
@@ -1711,9 +2099,17 @@ def check_passwordless_adoption(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id": "AZURE-MFA-009", "severity": "Low", "status": "error",
-                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
-                "risk_description": "Could not check passwordless adoption.", "remediation_steps": "Ensure Reports.Read.All permission is granted.", "estimated_effort": "Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-009", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 ALL_CHECKS = [
@@ -1901,7 +2297,7 @@ def run_scheduled_scan():
 def check_pim_notification_alerts(graph, target_config):
     """AZURE-PIM-004 — PIM sends alerts for role activation"""
     try:
-        alerts = graph.pages("/privilegedAccess/aadroles/settings")
+        alerts = graph.get_all_pages("/privilegedAccess/aadroles/settings")
         return {
             "check_id": "AZURE-PIM-004", "severity": "Medium",
             "status": "passed", "score": 0.0, "affected_resources": [],
@@ -1911,20 +2307,27 @@ def check_pim_notification_alerts(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PIM-004","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check PIM notifications.",
-                "remediation_steps":"Ensure PrivilegedAccess.Read.AzureAD permission is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-004", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_guest_global_admin(graph, target_config):
     """AZURE-GUEST-005 — No guest users assigned privileged roles"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         priv = {"Global Administrator","Security Administrator","Privileged Role Administrator","Exchange Administrator"}
         guest_admins = []
         for role in roles:
             if role.get("displayName") not in priv: continue
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 if m.get("userType") == "Guest":
                     guest_admins.append({"user": m.get("displayName"), "upn": m.get("userPrincipalName"), "role": role.get("displayName")})
         return {
@@ -1938,18 +2341,26 @@ def check_no_guest_global_admin(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-GUEST-005","severity":"Critical","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check guest role assignments.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GUEST-005", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_shared_accounts(graph, target_config):
     """AZURE-IDENTITY-011 — No shared/generic accounts in privileged roles"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         shared_keywords = ["shared", "generic", "admin", "service", "system", "team", "helpdesk", "support"]
         shared_admins = []
         for role in roles:
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 upn = m.get("userPrincipalName", "").lower()
                 name = m.get("displayName", "").lower()
                 if any(k in upn or k in name for k in shared_keywords):
@@ -1965,21 +2376,29 @@ def check_no_shared_accounts(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-IDENTITY-011","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check for shared accounts.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-011", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_privileged_role_count(graph, target_config):
     """AZURE-PRIV-005 — Total privileged role assignments are minimised"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         priv_roles = {"Global Administrator","Privileged Role Administrator","Security Administrator",
                       "Exchange Administrator","SharePoint Administrator","Teams Administrator",
                       "Application Administrator","Cloud Application Administrator","Conditional Access Administrator"}
         total_assignments = []
         for role in roles:
             if role.get("displayName") not in priv_roles: continue
-            members = graph.pages(f"/directoryRoles/{role['id']}/members")
+            members = graph.get_all_pages(f"/directoryRoles/{role['id']}/members")
             total_assignments.extend([{"user": m.get("displayName"), "role": role.get("displayName")} for m in members])
         excessive = len(total_assignments) > 20
         return {
@@ -1993,14 +2412,22 @@ def check_privileged_role_count(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-005","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not count privileged assignments.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-005", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_app_multitenant_disabled(graph, target_config):
     """AZURE-APP-008 — Applications are not unnecessarily multi-tenant"""
     try:
-        apps = graph.pages("/applications?$select=id,displayName,signInAudience,web")
+        apps = graph.get_all_pages("/applications?$select=id,displayName,signInAudience,web")
         multitenant = [
             {"app": a.get("displayName"), "id": a.get("id"), "audience": a.get("signInAudience")}
             for a in apps
@@ -2017,14 +2444,22 @@ def check_app_multitenant_disabled(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-008","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check app multi-tenant settings.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-008", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_app_implicit_flow_disabled(graph, target_config):
     """AZURE-APP-009 — Applications do not use implicit grant flow"""
     try:
-        apps = graph.pages("/applications?$select=id,displayName,web,spa")
+        apps = graph.get_all_pages("/applications?$select=id,displayName,web,spa")
         implicit_apps = []
         for a in apps:
             web = a.get("web", {}) or {}
@@ -2043,14 +2478,22 @@ def check_app_implicit_flow_disabled(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-009","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check implicit flow settings.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-009", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_reply_url_wildcards(graph, target_config):
     """AZURE-APP-010 — No wildcard redirect URIs in app registrations"""
     try:
-        apps = graph.pages("/applications?$select=id,displayName,web,spa,publicClient")
+        apps = graph.get_all_pages("/applications?$select=id,displayName,web,spa,publicClient")
         wildcard_apps = []
         for a in apps:
             all_uris = []
@@ -2071,14 +2514,22 @@ def check_no_reply_url_wildcards(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-010","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check redirect URIs.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-010", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_conditional_access_policy_count(graph, target_config):
     """AZURE-CA-015 — Sufficient CA policies are configured"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         enabled = [p for p in policies if p.get("state") == "enabled"]
         sufficient = len(enabled) >= 5
         return {
@@ -2092,14 +2543,22 @@ def check_conditional_access_policy_count(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-015","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not count CA policies.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-015", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_directory_role_assignments_reviewed(graph, target_config):
     """AZURE-PRIV-006 — All directory role assignments are documented"""
     try:
-        assignments = graph.pages("/roleManagement/directory/roleAssignments?$expand=principal,roleDefinition")
+        assignments = graph.get_all_pages("/roleManagement/directory/roleAssignments?$expand=principal,roleDefinition")
         undocumented = [
             {"user": a.get("principal", {}).get("displayName"), "role": a.get("roleDefinition", {}).get("displayName")}
             for a in assignments
@@ -2115,9 +2574,17 @@ def check_directory_role_assignments_reviewed(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-006","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check role assignments.","remediation_steps":"Ensure RoleManagement.Read.Directory is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-006", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_sign_in_logs_retained(graph, target_config):
     """AZURE-MONITORING-005 — Sign-in logs are being generated and accessible"""
@@ -2142,9 +2609,17 @@ def check_sign_in_logs_retained(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MONITORING-005","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not access sign-in logs.","remediation_steps":"Ensure AuditLog.Read.All permission is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-005", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_emergency_access_monitored(graph, target_config):
     """AZURE-MONITORING-004 — Break glass account sign-ins are alerted"""
@@ -2160,7 +2635,7 @@ def check_emergency_access_monitored(graph, target_config):
                 "remediation_steps": "1. Configure the break glass group ID in target settings. 2. Create a Log Analytics alert rule triggered by any sign-in from break glass accounts. 3. Route alert to security team via email and SMS immediately.",
                 "estimated_effort": "Low",
             }
-        members = graph.pages(f"/groups/{bg_group_id}/members?$select=id,displayName,userPrincipalName")
+        members = graph.get_all_pages(f"/groups/{bg_group_id}/members?$select=id,displayName,userPrincipalName")
         return {
             "check_id": "AZURE-MONITORING-004", "severity": "Critical",
             "status": "passed" if members else "failed",
@@ -2172,20 +2647,28 @@ def check_emergency_access_monitored(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MONITORING-004","severity":"Critical","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check break glass monitoring.","remediation_steps":"Configure break glass group ID in target settings.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-004", "severity": "Critical",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_admin_mfa_methods_strong(graph, target_config):
     """AZURE-MFA-010 — Admins use strong MFA methods (not just SMS)"""
     try:
         priv = {"Global Administrator", "Security Administrator", "Privileged Role Administrator"}
         weak_mfa_admins = []
-        for role in graph.pages("/directoryRoles"):
+        for role in graph.get_all_pages("/directoryRoles"):
             if role.get("displayName") not in priv: continue
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 try:
-                    methods = graph.pages(f"/users/{m['id']}/authentication/methods")
+                    methods = graph.get_all_pages(f"/users/{m['id']}/authentication/methods")
                     method_types = [x.get("@odata.type", "").lower() for x in methods]
                     has_strong = any(t for t in method_types if "fido2" in t or "windowshello" in t or "softwareoath" in t or "microsoftauthenticator" in t)
                     has_sms_only = any("phone" in t for t in method_types) and not has_strong
@@ -2204,9 +2687,17 @@ def check_admin_mfa_methods_strong(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MFA-010","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check admin MFA methods.","remediation_steps":"Ensure UserAuthenticationMethod.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-010", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_license_p2_available(graph, target_config):
     """AZURE-IDENTITY-012 — Entra ID P2 licences available for security features"""
@@ -2228,9 +2719,17 @@ def check_license_p2_available(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id":"AZURE-IDENTITY-012","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check licences.","remediation_steps":"Ensure Directory.Read.All permission is granted.","estimated_effort":"High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-012", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_legacy_auth_successful(graph, target_config):
     """AZURE-MONITORING-006 — No successful legacy auth sign-ins in last 30 days"""
@@ -2250,14 +2749,22 @@ def check_no_legacy_auth_successful(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MONITORING-006","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check legacy auth sign-ins.","remediation_steps":"Ensure AuditLog.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-006", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_token_lifetime_policy(graph, target_config):
     """AZURE-CA-016 — Token lifetime policies configured"""
     try:
-        policies = graph.pages("/policies/tokenLifetimePolicies")
+        policies = graph.get_all_pages("/policies/tokenLifetimePolicies")
         return {
             "check_id": "AZURE-CA-016", "severity": "Low",
             "status": "passed" if policies else "failed",
@@ -2269,14 +2776,22 @@ def check_token_lifetime_policy(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-016","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check token lifetime policies.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-016", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_continuous_access_evaluation(graph, target_config):
     """AZURE-CA-017 — Continuous Access Evaluation enabled"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         cae_policies = [p for p in policies
                        if p.get("state") == "enabled"
                        and p.get("sessionControls", {}).get("continuousAccessEvaluation", {}).get("mode") == "strictLocation"]
@@ -2291,16 +2806,24 @@ def check_continuous_access_evaluation(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-017","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check CAE policies.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-017", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_no_expired_service_principal_secrets(graph, target_config):
     """AZURE-APP-011 — No service principals with expired credentials"""
     try:
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        sps = graph.pages("/servicePrincipals?$select=id,displayName,passwordCredentials,keyCredentials")
+        sps = graph.get_all_pages("/servicePrincipals?$select=id,displayName,passwordCredentials,keyCredentials")
         expired_sps = []
         for sp in sps:
             for cred in (sp.get("passwordCredentials") or []) + (sp.get("keyCredentials") or []):
@@ -2321,14 +2844,22 @@ def check_no_expired_service_principal_secrets(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-011","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check service principal credentials.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-011", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_b2c_policies_reviewed(graph, target_config):
     """AZURE-IDENTITY-014 — External authentication policies reviewed"""
     try:
-        policy = graph.get("/policies/externalIdentitiesPolicy")
+        policy = graph.get("/policies/crossTenantAccessPolicy")
         allow_guests = policy.get("allowExternalIdentitiesToLeave", True)
         allow_email = policy.get("allowDeletedIdentitiesDataRemoval", False)
         return {
@@ -2341,19 +2872,27 @@ def check_b2c_policies_reviewed(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-IDENTITY-014","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check external identity policies.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-014", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_privileged_role_separation(graph, target_config):
     """AZURE-PRIV-007 — Privileged and normal work accounts are separate"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         priv_names = {"Global Administrator","Security Administrator","Privileged Role Administrator"}
         dual_role_users = []
         for role in roles:
             if role.get("displayName") not in priv_names: continue
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 upn = m.get("userPrincipalName", "")
                 # Check if admin UPN looks like a regular work account (not a dedicated admin account)
                 if upn and not any(x in upn.lower() for x in ["-adm", "_adm", "admin@", ".admin@", "adm.", "priv"]):
@@ -2369,14 +2908,22 @@ def check_privileged_role_separation(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-007","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check account separation.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-007", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_app_registration_count(graph, target_config):
     """AZURE-APP-012 — App registration count is reasonable"""
     try:
-        apps = graph.pages("/applications?$select=id,displayName,createdDateTime")
+        apps = graph.get_all_pages("/applications?$select=id,displayName,createdDateTime")
         total = len(apps)
         excessive = total > 100
         return {
@@ -2390,9 +2937,17 @@ def check_app_registration_count(graph, target_config):
             "estimated_effort": "High",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-012","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not count app registrations.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"High"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-012", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_mfa_fraud_alert(graph, target_config):
     """AZURE-MFA-011 — MFA fraud alert configured"""
@@ -2411,18 +2966,26 @@ def check_mfa_fraud_alert(graph, target_config):
             "estimated_effort": "Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MFA-011","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check MFA fraud alert settings.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MFA-011", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_group_owners_exist(graph, target_config):
     """AZURE-GROUP-006 — All groups have at least one owner"""
     try:
-        groups = graph.pages("/groups?$select=id,displayName,groupTypes")
+        groups = graph.get_all_pages("/groups?$select=id,displayName,groupTypes")
         no_owner_groups = []
         for g in groups[:50]:
             try:
-                owners = graph.pages(f"/groups/{g['id']}/owners")
+                owners = graph.get_all_pages(f"/groups/{g['id']}/owners")
                 if not owners:
                     no_owner_groups.append({"group": g.get("displayName"), "id": g.get("id")})
             except Exception:
@@ -2438,9 +3001,17 @@ def check_group_owners_exist(graph, target_config):
             "estimated_effort": "Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-GROUP-006","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check group owners.","remediation_steps":"Ensure Group.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-006", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 EXTRA_CHECKS = [
     check_pim_notification_alerts,
@@ -2475,8 +3046,8 @@ ALL_CHECKS.extend(EXTRA_CHECKS)
 def check_block_dirsync_untrusted(graph, target_config):
     """AZURE-CA-DIRSYNC — Block dir sync accounts from untrusted networks"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
-        users = graph.pages("/users?$filter=startswith(userPrincipalName,'Sync_')&$select=id,displayName,userPrincipalName")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
+        users = graph.get_all_pages("/users?$filter=startswith(userPrincipalName,'Sync_')&$select=id,displayName,userPrincipalName")
         if not users:
             return {"check_id":"AZURE-CA-DIRSYNC","severity":"High","status":"passed","score":0.0,
                     "affected_resources":[],"evidence":{"sync_accounts":0},"risk_description":"No directory sync accounts found.",
@@ -2497,14 +3068,22 @@ def check_block_dirsync_untrusted(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-DIRSYNC","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check directory sync account protection.","remediation_steps":"Ensure Directory.Read.All and Policy.Read.All permissions are granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-DIRSYNC", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_require_approver(graph, target_config):
     """AZURE-PIM-APPROVER — Require approver for high-privilege role activation"""
     try:
-        policies = graph.pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
+        policies = graph.get_all_pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
         no_approver = []
         high_priv_roles = {"Global Administrator","Privileged Role Administrator","Security Administrator"}
         for policy in policies:
@@ -2528,16 +3107,24 @@ def check_pim_require_approver(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PIM-APPROVER","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check PIM approval settings.","remediation_steps":"Ensure PrivilegedAccess.Read.AzureAD is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-APPROVER", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_remove_stale_dirsync_accounts(graph, target_config):
     """AZURE-IDENTITY-DIRSYNC — Remove unused directory synchronization accounts"""
     try:
         from datetime import datetime, timezone, timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-        users = graph.pages("/users?$filter=startswith(userPrincipalName,'Sync_')&$select=id,displayName,userPrincipalName,signInActivity,accountEnabled")
+        users = graph.get_all_pages("/users?$filter=startswith(userPrincipalName,'Sync_')&$select=id,displayName,userPrincipalName,signInActivity,accountEnabled")
         stale = [
             {"upn":u.get("userPrincipalName"),"last_signin":u.get("signInActivity",{}).get("lastSignInDateTime","Never")}
             for u in users
@@ -2557,14 +3144,22 @@ def check_remove_stale_dirsync_accounts(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-IDENTITY-DIRSYNC","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check directory sync accounts.","remediation_steps":"Ensure Directory.Read.All and AuditLog.Read.All are granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-DIRSYNC", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_block_security_reg_on_risk(graph, target_config):
     """AZURE-CA-SECREG — Block security info registration when sign-in risk detected"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         reg_policies = [
             p for p in policies if p.get("state")=="enabled"
             and "registerSecurityInfo" in str(p.get("conditions",{}).get("applications",{}).get("includeUserActions",[]))
@@ -2581,14 +3176,22 @@ def check_block_security_reg_on_risk(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-SECREG","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check security registration protection.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-SECREG", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_block_admin_portals_on_risk(graph, target_config):
     """AZURE-CA-ADMINRISK — Block admin portal access when sign-in risk detected"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         admin_risk = [
             p for p in policies if p.get("state")=="enabled"
             and "MicrosoftAdminPortals" in str(p.get("conditions",{}).get("applications",{}).get("includeApplications",[]))
@@ -2605,14 +3208,22 @@ def check_block_admin_portals_on_risk(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-ADMINRISK","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check admin portal risk policy.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-ADMINRISK", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_mfa_on_activation(graph, target_config):
     """AZURE-PIM-MFA — PIM requires MFA on role activation"""
     try:
-        policies = graph.pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
+        policies = graph.get_all_pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
         no_mfa = []
         for policy in policies:
             rules = policy.get("rules",[])
@@ -2631,14 +3242,22 @@ def check_pim_mfa_on_activation(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PIM-MFA","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check PIM MFA settings.","remediation_steps":"Ensure PrivilegedAccess.Read.AzureAD is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-MFA", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_ca_persistent_session_guest(graph, target_config):
     """AZURE-CA-GUESTSESSION — Configure session timeout for guests"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         guest_session = [
             p for p in policies if p.get("state")=="enabled"
             and "GuestsOrExternalUsers" in str(p.get("conditions",{}).get("users",{}))
@@ -2655,14 +3274,22 @@ def check_ca_persistent_session_guest(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-GUESTSESSION","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check guest session policies.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-GUESTSESSION", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_ca_unmanaged_device_session(graph, target_config):
     """AZURE-CA-UNMGDSESSION — Require non-persistent session for unmanaged devices"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         unmgd_session = [
             p for p in policies if p.get("state")=="enabled"
             and p.get("sessionControls",{}).get("persistentBrowser",{}).get("isEnabled")
@@ -2679,14 +3306,22 @@ def check_ca_unmanaged_device_session(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-UNMGDSESSION","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check unmanaged device session policy.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-UNMGDSESSION", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_ca_exclusion_groups(graph, target_config):
     """AZURE-CA-EXCLUSIONS — CA exclusions use dedicated groups"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         enabled = [p for p in policies if p.get("state")=="enabled"]
         direct_user_exclusions = []
         for p in enabled:
@@ -2707,19 +3342,27 @@ def check_ca_exclusion_groups(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-EXCLUSIONS","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check CA exclusion configuration.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-EXCLUSIONS", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_remove_admin_mailboxes(graph, target_config):
     """AZURE-PRIV-MAILBOX — Privileged admins should not have mailboxes on admin accounts"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         priv_names = {"Global Administrator","Privileged Role Administrator","Security Administrator"}
         admins_with_mail = []
         for role in roles:
             if role.get("displayName") not in priv_names: continue
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 try:
                     u = graph.get(f"/users/{m['id']}?$select=displayName,userPrincipalName,mail,proxyAddresses")
                     if u.get("mail") and not u.get("userPrincipalName","").endswith(".onmicrosoft.com"):
@@ -2743,14 +3386,22 @@ def check_remove_admin_mailboxes(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-MAILBOX","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check admin account mailboxes.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-MAILBOX", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_block_msol_powershell(graph, target_config):
     """AZURE-CA-MSOL — Block access to MSOL/legacy PowerShell endpoints"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         # MSOL PowerShell App ID: 1b730954-1685-4b74-9bfd-dac224a7b894 (Azure AD PowerShell)
         msol_blocked = any(
             p.get("state")=="enabled"
@@ -2778,9 +3429,17 @@ def check_block_msol_powershell(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-MSOL","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check MSOL blocking.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-MSOL", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_stale_cloud_only_users(graph, target_config):
     """AZURE-IDENTITY-STALE — Disable or remove stale cloud-only users"""
@@ -2788,7 +3447,7 @@ def check_stale_cloud_only_users(graph, target_config):
         from datetime import datetime, timezone, timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=90)
         # Cloud-only users (not synced from on-premises)
-        users = graph.pages("/users?$select=id,displayName,userPrincipalName,signInActivity,accountEnabled,onPremisesSyncEnabled")
+        users = graph.get_all_pages("/users?$select=id,displayName,userPrincipalName,signInActivity,accountEnabled,onPremisesSyncEnabled")
         stale = [
             {"user":u.get("displayName"),"upn":u.get("userPrincipalName"),
              "last_signin":u.get("signInActivity",{}).get("lastSignInDateTime","Never")}
@@ -2812,14 +3471,22 @@ def check_stale_cloud_only_users(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-IDENTITY-STALE","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check stale cloud users.","remediation_steps":"Ensure User.Read.All and AuditLog.Read.All are granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-IDENTITY-STALE", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_app_http_redirect_uris(graph, target_config):
     """AZURE-APP-HTTP — Application redirect URIs not using HTTPS"""
     try:
-        apps = graph.pages("/applications?$select=id,displayName,web,spa,publicClient")
+        apps = graph.get_all_pages("/applications?$select=id,displayName,web,spa,publicClient")
         http_apps = []
         for a in apps:
             for section in ["web","spa"]:
@@ -2838,14 +3505,22 @@ def check_app_http_redirect_uris(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-HTTP","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check redirect URI protocols.","remediation_steps":"Ensure Application.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-HTTP", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_max_activation_duration(graph, target_config):
     """AZURE-PIM-DURATION — PIM maximum activation duration per best practice"""
     try:
-        policies = graph.pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
+        policies = graph.get_all_pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
         long_duration = []
         for policy in policies:
             role_name = policy.get("displayName","")
@@ -2869,19 +3544,27 @@ def check_pim_max_activation_duration(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PIM-DURATION","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check PIM activation duration.","remediation_steps":"Ensure PrivilegedAccess.Read.AzureAD is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-DURATION", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_remove_personal_email_from_admins(graph, target_config):
     """AZURE-PRIV-PERSONALEMAIL — Remove personal email from admin accounts"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         priv_names = {"Global Administrator","Security Administrator","Privileged Role Administrator"}
         personal_email_admins = []
         for role in roles:
             if role.get("displayName") not in priv_names: continue
-            for m in graph.pages(f"/directoryRoles/{role['id']}/members"):
+            for m in graph.get_all_pages(f"/directoryRoles/{role['id']}/members"):
                 try:
                     u = graph.get(f"/users/{m['id']}?$select=displayName,userPrincipalName,otherMails")
                     other_mails = u.get("otherMails",[])
@@ -2902,17 +3585,25 @@ def check_remove_personal_email_from_admins(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-PERSONALEMAIL","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check admin personal email addresses.","remediation_steps":"Ensure Directory.Read.All is granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-PERSONALEMAIL", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_service_principals_not_admins(graph, target_config):
     """AZURE-PRIV-SP — Service principals should not be in privileged roles"""
     try:
-        roles = graph.pages("/directoryRoles")
+        roles = graph.get_all_pages("/directoryRoles")
         sp_in_roles = []
         for role in roles:
-            members = graph.pages(f"/directoryRoles/{role['id']}/members")
+            members = graph.get_all_pages(f"/directoryRoles/{role['id']}/members")
             for m in members:
                 if m.get("@odata.type") == "#microsoft.graph.servicePrincipal":
                     sp_in_roles.append({"sp":m.get("displayName"),"role":role.get("displayName")})
@@ -2927,9 +3618,17 @@ def check_service_principals_not_admins(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PRIV-SP","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check service principal role assignments.","remediation_steps":"Ensure Directory.Read.All and RoleManagement.Read.Directory are granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PRIV-SP", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_bg_password_rotation(graph, target_config):
     """AZURE-BG-ROTATION — Break glass account passwords changed regularly"""
@@ -2942,7 +3641,7 @@ def check_bg_password_rotation(graph, target_config):
                     "risk_description":"Break glass account passwords should be rotated at least annually to ensure they haven't been compromised.",
                     "remediation_steps":"Configure break glass group ID in target settings. Then establish a process to rotate break glass passwords at least every 12 months. Document each rotation with date and witnesses in a security log.",
                     "estimated_effort":"Low"}
-        members = graph.pages(f"/groups/{bg_group_id}/members?$select=id,displayName,userPrincipalName,lastPasswordChangeDateTime")
+        members = graph.get_all_pages(f"/groups/{bg_group_id}/members?$select=id,displayName,userPrincipalName,lastPasswordChangeDateTime")
         old_passwords = []
         from datetime import datetime, timezone, timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=365)
@@ -2963,18 +3662,26 @@ def check_bg_password_rotation(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-BG-ROTATION","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check break glass password age.","remediation_steps":"Configure break glass group ID in target settings and ensure Directory.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-BG-ROTATION", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_all_users_group_apps(graph, target_config):
     """AZURE-APP-ALLUSERS — Review apps assigned to All Users group"""
     try:
         # Get the "All Users" group GUID
-        groups = graph.pages("/groups?$filter=displayName eq 'All Users'&$select=id,displayName")
+        groups = graph.get_all_pages("/groups?$filter=displayName eq 'All Users'&$select=id,displayName")
         if not groups:
             # Also check for common all-user groups
-            groups = graph.pages("/groups?$select=id,displayName,groupTypes&$top=999")
+            groups = graph.get_all_pages("/groups?$select=id,displayName,groupTypes&$top=999")
             all_user_groups = [g for g in groups if g.get("displayName","").lower() in ["all users","everyone","all employees","all staff"]]
         else:
             all_user_groups = groups
@@ -2987,7 +3694,7 @@ def check_all_users_group_apps(graph, target_config):
         apps_with_all_users = []
         for group in all_user_groups[:3]:  # Check top 3 all-user groups
             try:
-                sp_assignments = graph.pages(f"/groups/{group['id']}/appRoleAssignments")
+                sp_assignments = graph.get_all_pages(f"/groups/{group['id']}/appRoleAssignments")
                 for assignment in sp_assignments:
                     apps_with_all_users.append({
                         "group":group.get("displayName"),
@@ -3008,14 +3715,22 @@ def check_all_users_group_apps(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-ALLUSERS","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check apps assigned to All Users.","remediation_steps":"Ensure Application.Read.All and Group.Read.All are granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-ALLUSERS", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_pim_two_approvers(graph, target_config):
     """AZURE-PIM-2APPROVERS — At least 2 approvers for high-privilege PIM activation"""
     try:
-        policies = graph.pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
+        policies = graph.get_all_pages("/policies/roleManagementPolicies?$filter=scopeType eq 'Directory'")
         single_approver = []
         high_priv = {"Global Administrator","Privileged Role Administrator"}
         for policy in policies:
@@ -3039,14 +3754,22 @@ def check_pim_two_approvers(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-PIM-2APPROVERS","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check PIM approver count.","remediation_steps":"Ensure PrivilegedAccess.Read.AzureAD is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-PIM-2APPROVERS", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_workload_identity_risk(graph, target_config):
     """AZURE-APP-WORKLOADRISK — Block service principals with risk detections"""
     try:
-        risky_sps = graph.pages("/identityProtection/riskyServicePrincipals?$select=id,displayName,riskLevel,riskState")
+        risky_sps = graph.get_all_pages("/identityProtection/riskyServicePrincipals?$select=id,displayName,riskLevel,riskState")
         at_risk = [
             {"sp":s.get("displayName"),"risk":s.get("riskLevel"),"state":s.get("riskState")}
             for s in risky_sps
@@ -3063,16 +3786,24 @@ def check_workload_identity_risk(graph, target_config):
             "estimated_effort":"Moderate",
         }
     except Exception as e:
-        return {"check_id":"AZURE-APP-WORKLOADRISK","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check workload identity risk.","remediation_steps":"Ensure IdentityRiskyUser.Read.All and appropriate workload identity permissions are granted.","estimated_effort":"Moderate"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-APP-WORKLOADRISK", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_stale_risky_users_dismissed(graph, target_config):
     """AZURE-RISK-STALE — Dismiss stale risky user status"""
     try:
         from datetime import datetime, timezone, timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-        risky = graph.pages("/identityProtection/riskyUsers?$select=id,displayName,userPrincipalName,riskLevel,riskLastUpdatedDateTime")
+        risky = graph.get_all_pages("/identityProtection/riskyUsers?$top=100")
         stale_risky = [
             {"user":u.get("displayName"),"upn":u.get("userPrincipalName"),
              "risk":u.get("riskLevel"),"last_updated":u.get("riskLastUpdatedDateTime")}
@@ -3091,14 +3822,22 @@ def check_stale_risky_users_dismissed(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-RISK-STALE","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check stale risky user statuses.","remediation_steps":"Ensure IdentityRiskyUser.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-RISK-STALE", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_ca_block_guest_admin_portals(graph, target_config):
     """AZURE-CA-GUESTADMIN — Block guest access to Microsoft admin portals"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         guest_admin_block = [
             p for p in policies if p.get("state")=="enabled"
             and "GuestsOrExternalUsers" in str(p.get("conditions",{}).get("users",{}))
@@ -3116,15 +3855,23 @@ def check_ca_block_guest_admin_portals(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-GUESTADMIN","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check guest admin portal policy.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-GUESTADMIN", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_users_lockout_count(graph, target_config):
     """AZURE-MONITORING-LOCKOUT — Review users with high lockout counts"""
     try:
         # Check sign-in logs for users with many failed auth attempts
-        logs = graph.get("/auditLogs/signIns?$filter=status/errorCode eq 50053 or status/errorCode eq 50055&$top=20&$select=userDisplayName,userPrincipalName,status,createdDateTime")
+        logs = graph.get("/auditLogs/directoryAudits?$filter=activityDisplayName eq 'Sign-in activity'&$top=1")
         locked_users = {}
         for log in logs.get("value",[]):
             upn = log.get("userPrincipalName","")
@@ -3142,14 +3889,22 @@ def check_users_lockout_count(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-MONITORING-LOCKOUT","severity":"Medium","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check lockout events.","remediation_steps":"Ensure AuditLog.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-MONITORING-LOCKOUT", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_delete_empty_groups(graph, target_config):
     """AZURE-GROUP-EMPTY — Delete empty cloud-only groups"""
     try:
-        groups = graph.pages("/groups?$select=id,displayName,groupTypes,membershipType&$filter=NOT(groupTypes/any(t:t eq 'DynamicMembership'))")
+        groups = graph.get_all_pages("/groups?$select=id,displayName,groupTypes,membershipType&$filter=NOT(groupTypes/any(t:t eq 'DynamicMembership'))")
         empty_groups = []
         for g in groups[:50]:
             try:
@@ -3170,14 +3925,22 @@ def check_delete_empty_groups(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-GROUP-EMPTY","severity":"Low","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check for empty groups.","remediation_steps":"Ensure Group.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-GROUP-EMPTY", "severity": "Low",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 def check_block_ca_without_exclusion(graph, target_config):
     """AZURE-CA-BLOCKEXCL — Block CA policies should have exclusion groups"""
     try:
-        policies = graph.pages("/identity/conditionalAccess/policies")
+        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
         block_policies = [
             p for p in policies if p.get("state")=="enabled"
             and "block" in str(p.get("grantControls",{}).get("builtInControls",[])).lower()
@@ -3199,9 +3962,17 @@ def check_block_ca_without_exclusion(graph, target_config):
             "estimated_effort":"Low",
         }
     except Exception as e:
-        return {"check_id":"AZURE-CA-BLOCKEXCL","severity":"High","status":"error","score":0.0,
-                "affected_resources":[],"evidence":{"error":str(e)},
-                "risk_description":"Could not check CA block policy exclusions.","remediation_steps":"Ensure Policy.Read.All is granted.","estimated_effort":"Low"}
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
+        return {
+            "check_id": "AZURE-CA-BLOCKEXCL", "severity": "High",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": _rem,
+            "estimated_effort": "Low",
+        },
 
 
 # ─── Add all new checks to ALL_CHECKS ────────────────────────────────────────
