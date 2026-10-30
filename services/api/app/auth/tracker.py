@@ -3,17 +3,17 @@ Instance tracker — lightweight telemetry to know how many live EntraGuard
 deployments exist. Sends a minimal heartbeat to a central endpoint.
 
 What is sent:
-  - A stable anonymous instance ID (SHA256 hash of SECRET_KEY — no secrets exposed)
+  - A stable anonymous instance ID (random, persisted in the data volume)
   - Version string
   - Uptime timestamp
   - Hostname (can be overridden or disabled)
 
 No tenant data, no findings, no credentials are ever sent.
-Disable entirely with TELEMETRY_ENABLED=false in .env
+Opt-in: enable with TELEMETRY_ENABLED=true in .env (off by default).
 """
 
 import os
-import hashlib
+import uuid
 import asyncio
 import logging
 import httpx
@@ -22,14 +22,36 @@ from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
 
-TELEMETRY_ENABLED  = os.getenv("TELEMETRY_ENABLED", "true").lower() == "true"
+# Default matches docker-compose.yml (false) — telemetry is opt-in.
+TELEMETRY_ENABLED  = os.getenv("TELEMETRY_ENABLED", "false").lower() == "true"
 TELEMETRY_ENDPOINT = os.getenv("TELEMETRY_ENDPOINT", "https://telemetry.entra-guard.app/heartbeat")
-SECRET_KEY         = os.getenv("SECRET_KEY", "changeme")
 INSTANCE_NAME      = os.getenv("INSTANCE_NAME", "")
 APP_VERSION        = "2.0"
+INSTANCE_ID_FILE   = os.getenv("INSTANCE_ID_FILE", "/app/data/instance_id")
 
-# Stable anonymous ID — hash of secret key, never the key itself
-INSTANCE_ID = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
+
+def _load_instance_id() -> str:
+    # Previously sha256(SECRET_KEY)[:16], published on the unauthenticated
+    # /health endpoint — an offline oracle for guessing a weak SECRET_KEY
+    # (and thus forging JWTs). Use a random ID persisted next to users.json.
+    try:
+        with open(INSTANCE_ID_FILE) as f:
+            existing = f.read().strip()
+            if existing:
+                return existing
+    except OSError:
+        pass
+    new_id = uuid.uuid4().hex[:16]
+    try:
+        os.makedirs(os.path.dirname(INSTANCE_ID_FILE), exist_ok=True)
+        with open(INSTANCE_ID_FILE, "w") as f:
+            f.write(new_id)
+    except OSError as e:
+        log.debug(f"Could not persist instance id (non-critical): {e}")
+    return new_id
+
+
+INSTANCE_ID = _load_instance_id()
 
 # Track startup time
 _started_at = datetime.now(timezone.utc).isoformat()

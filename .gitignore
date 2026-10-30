@@ -1,6 +1,10 @@
 .env
-*.pyc
-__pycache__/
 node_modules/
 dist/
+__pycache__/
+*.pyc
+.DS_Store
 *.log
+.venv/
+venv/
+.pytest_cache/

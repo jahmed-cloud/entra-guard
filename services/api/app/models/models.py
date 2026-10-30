@@ -32,6 +32,12 @@ class ScanRun(Base):
     checks_failed = Column(Integer, default=0)
     checks_skipped = Column(Integer, default=0)
     error_message = Column(Text)
+    # AI-generated narrative summarising what actually matters from this scan —
+    # written once, after all findings are in, from the aggregate results only
+    # (severity counts, top findings, false-positive flags already set on
+    # individual findings). Never used to compute checks_passed/failed/skipped
+    # above; purely descriptive. Null when AI_EXPLAIN_ENABLED=false.
+    ai_summary = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=now_utc)
@@ -74,6 +80,20 @@ class Finding(Base):
     risk_description = Column(Text)
     remediation_steps = Column(Text)
     estimated_effort = Column(String, default="Low")
+    ai_explanation = Column(Text, nullable=True)
+    # Bounded to "none" | "possible" | "likely" — deliberately NOT a boolean.
+    # This is the AI's judgment about whether `status` might be wrong given
+    # context the deterministic check couldn't see (e.g. MFA enforced via a
+    # tenant setting the check doesn't query). It is advisory only — `status`
+    # above is never modified by this. See ai_explainer.py's module docstring.
+    ai_false_positive_likelihood = Column(String, nullable=True)
+    ai_false_positive_reason = Column(Text, nullable=True)
+    # Audit trail of Graph API paths the investigative agent queried while
+    # verifying this finding, e.g. ["/policies/identitySecurityDefaultsEnforcementPolicy"].
+    # Stored as JSON text (not a native array column) to keep the migration
+    # simple and consistent with the other JSONB-via-text fields on this
+    # model. Null for findings handled by the plain (non-agent) explainer.
+    ai_queries_made = Column(Text, nullable=True)
     first_seen_at = Column(DateTime(timezone=True), default=now_utc)
     last_seen_at = Column(DateTime(timezone=True), default=now_utc)
     resolved_at = Column(DateTime(timezone=True))

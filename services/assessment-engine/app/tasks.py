@@ -55,19 +55,33 @@ class GraphClient:
         self._token = d["access_token"]
         self._token_expiry = datetime.now(timezone.utc) + timedelta(seconds=d.get("expires_in", 3599) - 60)
 
-    def get(self, path, **kwargs):
+    def get(self, path, headers=None, **kwargs):
         self._ensure_token()
         base = "https://graph.microsoft.com/v1.0"
         url = path if path.startswith("http") else f"{base}{path}"
-        r = self._http.get(url, headers={"Authorization": f"Bearer {self._token}"}, **kwargs)
+        # Extra headers (e.g. ConsistencyLevel: eventual for advanced queries
+        # like $count / NOT filters) are merged with, never replace, auth.
+        r = self._http.get(url, headers={**(headers or {}), "Authorization": f"Bearer {self._token}"}, **kwargs)
         r.raise_for_status()
         return r.json()
 
-    def get_all_pages(self, path):
+    def get_all_pages(self, path, headers=None):
         results, url = [], path
         while url:
-            data = self.get(url)
-            results.extend(data.get("value", []))
+            data = self.get(url, headers=headers)
+            # Defensive: "value" can legitimately be explicitly null in some
+            # Graph API response shapes, not just absent — data.get("value", [])
+            # only applies its default when the KEY is missing, not when the
+            # key exists with a None value, so a bare .get() here can still
+            # return None and crash extend(). Also guard against any
+            # individual item in the page being malformed (None/non-dict) —
+            # every one of the 100+ checks that call this method assumes
+            # every returned item is a usable dict, and a single bad item
+            # from Graph would otherwise crash whichever check hit it first,
+            # which then cascades into a poisoned DB transaction for every
+            # check that runs after it in the same scan.
+            page_items = data.get("value") or []
+            results.extend(item for item in page_items if isinstance(item, dict))
             url = data.get("@odata.nextLink")
         return results
 
@@ -214,7 +228,7 @@ def check_privileged_admins_mfa(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_no_permanent_roles(graph, target_config):
@@ -250,7 +264,7 @@ def check_no_permanent_roles(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_privileged_accounts_cloud_only(graph, target_config):
@@ -286,7 +300,7 @@ def check_privileged_accounts_cloud_only(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_guest_pending_invitations(graph, target_config):
@@ -326,7 +340,7 @@ def check_guest_pending_invitations(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_stale_privileged_users(graph, target_config):
@@ -368,7 +382,7 @@ def check_stale_privileged_users(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_app_credential_expiry(graph, target_config):
@@ -409,7 +423,7 @@ def check_app_credential_expiry(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_user_consent_disabled(graph, target_config):
@@ -440,7 +454,7 @@ def check_user_consent_disabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_high_signin_risk_policy(graph, target_config):
@@ -495,7 +509,7 @@ def check_app_assignment_required(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_admin_consent_workflow(graph, target_config):
@@ -524,7 +538,7 @@ def check_admin_consent_workflow(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_sp_certificate_credentials(graph, target_config):
@@ -557,7 +571,7 @@ def check_sp_certificate_credentials(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_apps_without_owners(graph, target_config):
@@ -593,7 +607,7 @@ def check_apps_without_owners(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_user_app_registration_disabled(graph, target_config):
@@ -622,7 +636,7 @@ def check_user_app_registration_disabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_security_group_creation(graph, target_config):
@@ -651,7 +665,7 @@ def check_security_group_creation(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 def check_mfa_registration_campaign(graph, target_config):
@@ -681,7 +695,7 @@ def check_mfa_registration_campaign(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 # List of all check functions to run
@@ -727,22 +741,34 @@ def check_ca_block_risky_signins(graph, target_config):
 
 def check_ca_persistent_browser(graph, target_config):
     """AZURE-CA-006 — Prevent persistent browser sessions"""
-    policies = graph.get_conditional_access_policies()
-    session_policies = [
-        p for p in policies if p.get("state") == "enabled"
-        and p.get("sessionControls", {}).get("persistentBrowser", {}).get("isEnabled")
-        and p.get("sessionControls", {}).get("persistentBrowser", {}).get("mode") == "never"
-    ]
-    return {
-        "check_id": "AZURE-CA-006", "severity": "Medium",
-        "status": "passed" if session_policies else "failed",
-        "score": 0.0 if session_policies else 5.0,
-        "affected_resources": [] if session_policies else [{"issue": "Persistent browser sessions not prevented"}],
-        "evidence": {"session_policies": len(session_policies)},
-        "risk_description": "Persistent sessions allow access from shared or stolen devices without re-authentication.",
-        "remediation_steps": "Create CA policy with session control: Persistent browser session → Never persistent.",
-        "estimated_effort": "Low",
-    }
+    try:
+        policies = graph.get_conditional_access_policies()
+        session_policies = [
+            p for p in policies if p.get("state") == "enabled"
+            and (p.get("sessionControls") or {}).get("persistentBrowser", {}).get("isEnabled")
+            and (p.get("sessionControls") or {}).get("persistentBrowser", {}).get("mode") == "never"
+        ]
+        return {
+            "check_id": "AZURE-CA-006", "severity": "Medium",
+            "status": "passed" if session_policies else "failed",
+            "score": 0.0 if session_policies else 5.0,
+            "affected_resources": [] if session_policies else [{"issue": "Persistent browser sessions not prevented"}],
+            "evidence": {"session_policies": len(session_policies)},
+            "risk_description": "Persistent sessions allow access from shared or stolen devices without re-authentication.",
+            "remediation_steps": "Create CA policy with session control: Persistent browser session → Never persistent.",
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {
+            "check_id": "AZURE-CA-006", "severity": "Medium",
+            "status": _status, "score": 0.0, "affected_resources": [],
+            "evidence": {"error": _err},
+            "risk_description": "Check failed to run.",
+            "remediation_steps": "Ensure Policy.Read.All permission is granted.",
+            "estimated_effort": "Low",
+        }
 
 def check_ca_security_info_registration(graph, target_config):
     """AZURE-CA-008 — Block security info registration on risk"""
@@ -866,7 +892,7 @@ def check_sspr_enabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_sspr_requires_two_methods(graph, target_config):
     """AZURE-IDENTITY-002 — SSPR requires 2 authentication methods"""
@@ -894,7 +920,7 @@ def check_sspr_requires_two_methods(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_guest_invite_all_users(graph, target_config):
     """AZURE-GUEST-002 — Restrict who can invite guests"""
@@ -923,7 +949,7 @@ def check_no_guest_invite_all_users(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_guest_access_restricted(graph, target_config):
     """AZURE-GUEST-003 — Guest access permissions are restricted"""
@@ -953,7 +979,7 @@ def check_guest_access_restricted(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_named_locations_defined(graph, target_config):
     """AZURE-CA-010 — Named locations are defined"""
@@ -980,7 +1006,7 @@ def check_named_locations_defined(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_terms_of_use(graph, target_config):
     """AZURE-IDENTITY-010 — Terms of use configured"""
@@ -1007,7 +1033,7 @@ def check_terms_of_use(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_global_admin_service_accounts(graph, target_config):
     """AZURE-PRIV-002 — Service accounts should not be Global Admins"""
@@ -1043,7 +1069,7 @@ def check_no_global_admin_service_accounts(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_max_global_admins(graph, target_config):
     """AZURE-PRIV-003 — Fewer than 5 Global Administrators"""
@@ -1076,7 +1102,7 @@ def check_max_global_admins(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_min_global_admins(graph, target_config):
     """AZURE-PRIV-004 — At least 2 Global Administrators for redundancy"""
@@ -1109,7 +1135,7 @@ def check_min_global_admins(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_password_protection_enabled(graph, target_config):
     """AZURE-IDENTITY-003 — Password protection / smart lockout configured"""
@@ -1136,7 +1162,7 @@ def check_password_protection_enabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_banned_password_list(graph, target_config):
     """AZURE-IDENTITY-004 — Custom banned password list configured"""
@@ -1163,7 +1189,7 @@ def check_banned_password_list(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_personal_email_mfa(graph, target_config):
     """AZURE-IDENTITY-005 — No personal email as MFA contact"""
@@ -1202,7 +1228,7 @@ def check_no_personal_email_mfa(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_access_reviews_configured(graph, target_config):
     """AZURE-GOVERNANCE-001 — Access reviews configured for privileged roles"""
@@ -1229,12 +1255,17 @@ def check_access_reviews_configured(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_entitlement_management(graph, target_config):
     """AZURE-GOVERNANCE-002 — Entitlement management access packages configured"""
     try:
-        packages = None  # entitlementManagement requires EntitlementManagement.Read.All
+        # entitlementManagement/accessPackages requires EntitlementManagement.Read.All,
+        # which most tenants don't grant by default — attempt the real query and
+        # fall back to an "error" status (not a false "failed") if the
+        # permission genuinely isn't there, rather than hardcoding None and
+        # crashing on len(None) every single time this check runs.
+        packages = graph.get_all_pages("/identityGovernance/entitlementManagement/accessPackages")
         return {
             "check_id": "AZURE-GOVERNANCE-002", "severity": "Low",
             "status": "passed" if packages else "failed",
@@ -1256,7 +1287,7 @@ def check_entitlement_management(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_stale_guest_accounts(graph, target_config):
     """AZURE-GUEST-004 — No stale guest accounts (inactive 90 days)"""
@@ -1291,7 +1322,7 @@ def check_no_stale_guest_accounts(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_security_defaults_or_ca(graph, target_config):
     """AZURE-IDENTITY-006 — Security defaults or CA policies enabled (not both)"""
@@ -1325,7 +1356,7 @@ def check_security_defaults_or_ca(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_authenticator_features_enabled(graph, target_config):
     """AZURE-MFA-003 — Microsoft Authenticator number matching enabled"""
@@ -1354,7 +1385,7 @@ def check_authenticator_features_enabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_phishing_resistant_mfa(graph, target_config):
     """AZURE-MFA-004 — Phishing-resistant MFA for admins"""
@@ -1412,7 +1443,7 @@ def check_sms_mfa_discouraged(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_access_reviews(graph, target_config):
     """AZURE-PIM-002 — PIM roles have access reviews"""
@@ -1440,7 +1471,7 @@ def check_pim_access_reviews(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_justification_required(graph, target_config):
     """AZURE-PIM-003 — PIM requires justification for role activation"""
@@ -1474,7 +1505,7 @@ def check_pim_justification_required(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_diagnostic_settings_configured(graph, target_config):
     """AZURE-MONITORING-001 — Diagnostic settings / audit logs configured"""
@@ -1502,7 +1533,7 @@ def check_diagnostic_settings_configured(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_identity_protection_enabled(graph, target_config):
     """AZURE-MONITORING-002 — Identity Protection risk detections active"""
@@ -1530,7 +1561,7 @@ def check_identity_protection_enabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_risky_users_addressed(graph, target_config):
     """AZURE-MONITORING-003 — Risky users are being addressed"""
@@ -1558,7 +1589,7 @@ def check_risky_users_addressed(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_app_requires_approved_publisher(graph, target_config):
     """AZURE-APP-002 — Apps require verified publisher"""
@@ -1587,19 +1618,28 @@ def check_app_requires_approved_publisher(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_applications_using_delegated_permissions(graph, target_config):
     """AZURE-APP-003 — Review apps with high-privilege delegated permissions"""
     try:
-        sps = graph.get_all_pages("/servicePrincipals?$select=id,displayName,appId,oauth2PermissionGrants")
+        # oauth2PermissionGrants is a navigation property, not selectable via
+        # $select on /servicePrincipals — querying it this way silently
+        # returns no grants (or, on some Graph API versions, a 400). Fixed to
+        # use the top-level /oauth2PermissionGrants collection instead, one
+        # call for the whole tenant, joined locally against service principals.
+        sps = graph.get_all_pages("/servicePrincipals?$select=id,displayName,appId")
+        sp_by_id = {sp.get("id"): sp for sp in sps if isinstance(sp, dict)}
+        grants = graph.get_all_pages("/oauth2PermissionGrants?$select=clientId,scope,consentType")
+        grants = [g for g in grants if isinstance(g, dict)]
+
         high_priv_perms = ["Mail.ReadWrite", "Files.ReadWrite.All", "Directory.ReadWrite.All", "User.ReadWrite.All"]
         high_priv_apps = []
-        for sp in sps:
-            grants = sp.get("oauth2PermissionGrants", [])
-            for grant in grants:
-                if any(p in grant.get("scope", "") for p in high_priv_perms):
-                    high_priv_apps.append({"app": sp.get("displayName"), "scope": grant.get("scope", "")})
+        for grant in grants:
+            scope = grant.get("scope", "")
+            if any(p in scope for p in high_priv_perms):
+                sp = sp_by_id.get(grant.get("clientId"), {})
+                high_priv_apps.append({"app": sp.get("displayName", "Unknown application"), "scope": scope})
         return {
             "check_id": "AZURE-APP-003", "severity": "High",
             "status": "passed" if not high_priv_apps else "failed",
@@ -1621,7 +1661,7 @@ def check_applications_using_delegated_permissions(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_service_principal_owned_by_users(graph, target_config):
     """AZURE-APP-004 — Service principals have designated owners"""
@@ -1656,7 +1696,7 @@ def check_service_principal_owned_by_users(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_users_with_default_role_only(graph, target_config):
     """AZURE-IDENTITY-007 — Users without any role assigned (audit)"""
@@ -1688,7 +1728,7 @@ def check_no_users_with_default_role_only(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_break_glass_accounts_exist(graph, target_config):
     """AZURE-BG-001 — Break glass accounts exist and are configured"""
@@ -1730,7 +1770,7 @@ def check_break_glass_accounts_exist(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_group_expiration_policy(graph, target_config):
     """AZURE-GROUP-001 — Group expiration policy configured"""
@@ -1757,7 +1797,7 @@ def check_group_expiration_policy(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_nested_groups_with_admin(graph, target_config):
     """AZURE-GROUP-002 — No nested groups with administrative roles"""
@@ -1790,7 +1830,7 @@ def check_no_nested_groups_with_admin(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_dynamic_groups_configured(graph, target_config):
     """AZURE-GROUP-003 — Dynamic groups used for automated access management"""
@@ -1818,7 +1858,7 @@ def check_dynamic_groups_configured(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_owners_not_excessive(graph, target_config):
     """AZURE-GROUP-004 — Groups do not have excessive owners (>5)"""
@@ -1853,7 +1893,7 @@ def check_owners_not_excessive(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_high_risk_signins_unresolved(graph, target_config):
     """AZURE-RISK-002 — No unresolved high-risk sign-ins"""
@@ -1880,7 +1920,7 @@ def check_no_high_risk_signins_unresolved(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_tenant_restrictions_configured(graph, target_config):
     """AZURE-IDENTITY-008 — Tenant restrictions configured for external access"""
@@ -1908,7 +1948,7 @@ def check_tenant_restrictions_configured(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_authentication_strength_policies(graph, target_config):
     """AZURE-MFA-007 — Custom authentication strength policies defined"""
@@ -1936,7 +1976,7 @@ def check_authentication_strength_policies(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_disabled_users_with_roles(graph, target_config):
     """AZURE-IDENTITY-009 — Disabled users do not retain role assignments"""
@@ -1974,7 +2014,7 @@ def check_no_disabled_users_with_roles(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_app_with_all_permissions(graph, target_config):
     """AZURE-APP-007 — No apps with .All permissions without justification"""
@@ -2010,7 +2050,7 @@ def check_no_app_with_all_permissions(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_conditional_access_coverage(graph, target_config):
     """AZURE-CA-011 — CA policies cover all cloud apps"""
@@ -2078,7 +2118,7 @@ def check_no_accounts_with_no_mfa_registered(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_passwordless_adoption(graph, target_config):
     """AZURE-MFA-009 — Passwordless authentication adoption"""
@@ -2109,20 +2149,525 @@ def check_passwordless_adoption(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Effective Coverage Engine
+# ─────────────────────────────────────────────────────────────────────────────
+# Problem: a check like "does a CA policy require MFA for all users" produces
+# false positives whenever the org achieves that outcome a DIFFERENT way —
+# e.g. two narrower policies that together cover everyone, or Security
+# Defaults instead of Conditional Access. This engine simulates a small set
+# of representative access scenarios against the UNION of all controls that
+# could apply (enabled CA policies + Security Defaults), rather than
+# pattern-matching a single policy shape.
+#
+# Used by: check_ca_mfa_all_users_v2 (AZURE-MFA-002-V2)
+#          check_block_legacy_auth_v2 (AZURE-CA-LEGACY-V2)
+#
+# These are ADDITIVE — the original AZURE-MFA-002 and AZURE-CA-LEGACY checks
+# still run unchanged. Compare both for a few scan cycles: if the -V2 check
+# passes while the original fails, that confirms the original was a false
+# positive caught by a compensating control (most likely Security Defaults).
+# Once confirmed, remove the -V1 entries from ALL_CHECKS below.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_COVERAGE_SCENARIOS = [
+    {"id": "member-office365",    "user_type": "member", "app": "Office365",              "role": "user"},
+    {"id": "member-azure-portal", "user_type": "member", "app": "MicrosoftAdminPortals",   "role": "user"},
+    {"id": "guest-office365",     "user_type": "guest",  "app": "Office365",               "role": "user"},
+    {"id": "member-admin-role",   "user_type": "member", "app": "All",                     "role": "admin"},
+]
+
+
+def _policy_targets_scenario(policy: dict, scenario: dict) -> bool:
+    """Conservative match: if we can't determine exclusion, assume the policy
+    applies — better to over-count coverage than silently miss a real gap."""
+    if policy.get("state") != "enabled":
+        return False
+    conditions = policy.get("conditions", {})
+    users = conditions.get("users", {})
+    apps = conditions.get("applications", {})
+
+    include_users = str(users.get("includeUsers", []))
+    include_roles = users.get("includeRoles", [])
+    include_guests = "GuestsOrExternalUsers" in str(users)
+
+    if scenario["role"] == "admin" and not include_roles and "All" not in include_users:
+        return False
+    if scenario["user_type"] == "guest" and not (include_guests or "All" in include_users):
+        return False
+    if scenario["user_type"] == "member" and include_guests and "All" not in include_users:
+        return False
+
+    include_apps = str(apps.get("includeApplications", []))
+    if scenario["app"] != "All" and scenario["app"] not in include_apps and "All" not in include_apps:
+        return False
+    return True
+
+
+def _policy_grants_mfa(policy: dict) -> bool:
+    return "mfa" in str(policy.get("grantControls", {}).get("builtInControls", [])).lower()
+
+
+def _policy_blocks_legacy_auth(policy: dict) -> bool:
+    conditions = policy.get("conditions", {})
+    client_apps = str(conditions.get("clientAppTypes", [])).lower()
+    controls = str(policy.get("grantControls", {}).get("builtInControls", [])).lower()
+    return ("other" in client_apps or "exchangeactivesync" in client_apps) and "block" in controls
+
+
+def _security_defaults_enabled(graph) -> bool:
+    try:
+        sd = graph.get("/policies/identitySecurityDefaultsEnforcementPolicy")
+        return bool(sd.get("isEnabled", False))
+    except Exception as e:
+        log.warning(f"Could not read security defaults: {e}")
+        return False
+
+
+def check_ca_mfa_all_users_v2(graph, target_config):
+    """AZURE-MFA-002-V2 — Effective MFA coverage across representative scenarios,
+    accounting for Security Defaults as a compensating control."""
+    try:
+        policies = graph.get_conditional_access_policies()
+        enabled = [p for p in policies if p.get("state") == "enabled"]
+        sec_defaults = _security_defaults_enabled(graph)
+
+        covered, gaps = [], []
+        for scenario in _COVERAGE_SCENARIOS:
+            applicable = [p for p in enabled if _policy_targets_scenario(p, scenario)]
+            mfa_via_ca = any(_policy_grants_mfa(p) for p in applicable)
+            if mfa_via_ca:
+                covered.append({**scenario, "covered_by": "conditional_access"})
+            elif sec_defaults:
+                covered.append({**scenario, "covered_by": "security_defaults"})
+            else:
+                gaps.append(scenario)
+
+        ok = len(gaps) == 0
+        return {
+            "check_id": "AZURE-MFA-002-V2", "severity": "High",
+            "status": "passed" if ok else "failed",
+            "score": 0.0 if ok else 8.0,
+            "affected_resources": [{"gap_scenario": g["id"], "user_type": g["user_type"], "app": g["app"]} for g in gaps],
+            "evidence": {
+                "scenarios_evaluated": len(_COVERAGE_SCENARIOS),
+                "scenarios_covered": len(covered),
+                "scenarios_with_gaps": len(gaps),
+                "security_defaults_enabled": sec_defaults,
+                "coverage_detail": covered,
+            },
+            "risk_description": (
+                f"{len(gaps)} of {len(_COVERAGE_SCENARIOS)} representative access scenarios have no MFA "
+                "requirement from any control (Conditional Access or Security Defaults)."
+            ),
+            "remediation_steps": (
+                "For each uncovered scenario, extend an existing CA policy's scope or create a new one "
+                "requiring MFA. If relying on Security Defaults, confirm it is actually enabled — it is "
+                "silently disabled the moment any Conditional Access policy is created."
+            ),
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        return {"check_id": "AZURE-MFA-002-V2", "severity": "High", "status": "error",
+                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
+                "risk_description": "Could not evaluate effective MFA coverage.",
+                "remediation_steps": "Ensure Policy.Read.All is granted.", "estimated_effort": "Low"}
+
+
+def check_block_legacy_auth_v2(graph, target_config):
+    """AZURE-CA-LEGACY-V2 — Effective legacy auth block, accounting for Security Defaults
+    (which implicitly disables legacy auth)."""
+    try:
+        policies = graph.get_conditional_access_policies()
+        enabled = [p for p in policies if p.get("state") == "enabled"]
+        blocked_via_ca = any(_policy_blocks_legacy_auth(p) for p in enabled)
+        sec_defaults = _security_defaults_enabled(graph)
+        ok = blocked_via_ca or sec_defaults
+
+        return {
+            "check_id": "AZURE-CA-LEGACY-V2", "severity": "High",
+            "status": "passed" if ok else "failed",
+            "score": 0.0 if ok else 5.9,
+            "affected_resources": [] if ok else [{"issue": "No CA policy or Security Defaults blocking legacy auth"}],
+            "evidence": {
+                "covered_by": "conditional_access" if blocked_via_ca else ("security_defaults" if sec_defaults else None),
+                "security_defaults_enabled": sec_defaults,
+            },
+            "risk_description": (
+                "Legacy authentication bypasses MFA and is the dominant vector for password spray "
+                "attacks. Neither a Conditional Access block policy nor Security Defaults covers it."
+            ),
+            "remediation_steps": (
+                "Enable Security Defaults if no CA policies are in use, OR create a CA policy blocking "
+                "legacy client app types. Do not enable both — they conflict."
+            ),
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        return {"check_id": "AZURE-CA-LEGACY-V2", "severity": "High", "status": "error",
+                "score": 0.0, "affected_resources": [], "evidence": {"error": str(e)},
+                "risk_description": "Could not evaluate effective legacy auth coverage.",
+                "remediation_steps": "Ensure Policy.Read.All is granted.", "estimated_effort": "Low"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Advanced Threat-Informed Hardening Checks
+# ─────────────────────────────────────────────────────────────────────────────
+# These checks target attack techniques with real breach precedent that were
+# not covered by the existing 117 checks:
+#   - Federation/domain trust abuse (Golden SAML-equivalent token forgery)
+#   - Custom domain verification gaps (phishing/subdomain-takeover infra)
+#   - Identity Protection licensing blind spot (P1-only tenants show "0 risky
+#     users" not because they're safe, but because detection never ran)
+#   - Certificate-based auth trust anchor abuse
+#   - Actual dangerous OAuth grant AUDIT (not just app registration scope
+#     review — grants that already exist and are active in the tenant today)
+#
+# All checks are read-only, use only the existing GraphClient interface, and
+# report evidence + remediation — none of them contain or enable exploitation
+# steps. Sourced from documented Microsoft incident guidance and MITRE
+# ATT&CK for Azure AD (federated credential abuse: T1606.002; consent grant
+# abuse: T1528; valid accounts via cloud identity: T1078.004).
+# ═══════════════════════════════════════════════════════════════════════════
+
+def check_federated_domain_trust(graph, target_config):
+    """AZURE-FED-001 — No unexpected federated domain trust configured
+    Federated domains delegate authentication to an external IdP (e.g. ADFS).
+    A federated domain added by a compromised admin account, or a legitimate
+    one with a compromised token-signing certificate, allows an attacker to
+    forge SAML tokens for ANY user in that domain — bypassing MFA and
+    Conditional Access entirely, since the token is trusted at face value.
+    This is the core mechanic behind Golden SAML-style attacks."""
+    try:
+        domains = graph.get_all_pages("/domains")
+        federated = [d for d in domains if d.get("authenticationType") == "Federated"]
+        return {
+            "check_id": "AZURE-FED-001", "severity": "Critical",
+            "status": "passed" if not federated else "failed",
+            "score": 0.0 if not federated else 8.7,
+            "affected_resources": [{"domain": d.get("id")} for d in federated],
+            "evidence": {"federated_domain_count": len(federated), "total_domains": len(domains)},
+            "risk_description": (
+                "Federated domains delegate authentication trust to an external identity provider. "
+                "If that provider or its signing certificate is compromised, an attacker can forge "
+                "valid tokens for any user in the domain, bypassing Conditional Access and MFA entirely."
+            ),
+            "remediation_steps": (
+                "If federation is not intentionally in use, this is unexpected and requires immediate "
+                "investigation — check Entra ID → Custom domain names for the federated domain's "
+                "configuration history and admin activity around when it was set. If federation is "
+                "intentional (hybrid AD FS), verify the token-signing certificate rotation schedule and "
+                "monitor sign-in logs for anomalous federated sign-ins. Consider migrating to Entra "
+                "Connect cloud sync with Seamless SSO to eliminate the federation trust dependency."
+            ),
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-FED-001", "severity": "Critical", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not check domain federation configuration.",
+                "remediation_steps": "Ensure Domain.Read.All permission is granted.",
+                "estimated_effort": "Low"}
+
+
+def check_unverified_domains(graph, target_config):
+    """AZURE-FED-002 — No unverified custom domains registered
+    Unverified domains left in a tenant (e.g. from an abandoned pilot, or
+    added by a since-departed admin) can potentially be claimed and verified
+    by anyone who can prove DNS control — including a former employee who
+    still controls the DNS zone, or via a lapsed domain registration. A
+    newly verified domain can then be used to create convincing phishing
+    infrastructure or, in some tenant configurations, influence email
+    routing and identity claims."""
+    try:
+        domains = graph.get_all_pages("/domains")
+        unverified = [d for d in domains if not d.get("isVerified", True)]
+        return {
+            "check_id": "AZURE-FED-002", "severity": "Medium",
+            "status": "passed" if not unverified else "failed",
+            "score": 0.0 if not unverified else 3.8,
+            "affected_resources": [{"domain": d.get("id")} for d in unverified],
+            "evidence": {"unverified_count": len(unverified)},
+            "risk_description": (
+                "Unverified domains sitting in the tenant are stale configuration that serves no "
+                "purpose but does represent a small future attack surface if DNS control changes hands."
+            ),
+            "remediation_steps": "Remove unverified domains that are no longer needed: Entra ID → Custom domain names → select domain → Delete.",
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-FED-002", "severity": "Medium", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not check domain verification status.",
+                "remediation_steps": "Ensure Domain.Read.All permission is granted.",
+                "estimated_effort": "Low"}
+
+
+def check_identity_protection_licensed(graph, target_config):
+    """AZURE-RISK-LICENSE — Identity Protection is actually licensed and active
+    AZURE-RISK-001/002 report on risky users via the Identity Protection API.
+    A tenant WITHOUT Entra ID P2 will show zero risky users — not because no
+    risk exists, but because the detection engine that generates those
+    signals never ran. This is a genuine blind spot: passing risky-user
+    checks on an unlicensed tenant is a false sense of security, not a
+    real security posture."""
+    try:
+        skus = graph.get("/subscribedSkus")
+        sku_list = skus.get("value", [])
+        p2_names = ("AAD_PREMIUM_P2", "SPE_E5", "ENTERPRISEPREMIUM", "IDENTITY_THREAT_PROTECTION")
+        has_p2 = any(
+            s.get("skuPartNumber", "") in p2_names or "P2" in s.get("skuPartNumber", "")
+            for s in sku_list
+        )
+        return {
+            "check_id": "AZURE-RISK-LICENSE", "severity": "High",
+            "status": "passed" if has_p2 else "failed",
+            "score": 0.0 if has_p2 else 6.5,
+            "affected_resources": [] if has_p2 else [{"issue": "No Entra ID P2 (or equivalent) licence detected in tenant"}],
+            "evidence": {"p2_or_equivalent_licensed": has_p2, "skus_checked": len(sku_list)},
+            "risk_description": (
+                "Without Entra ID P2, Identity Protection's risk detection engine does not run. Any "
+                "'0 risky users' result elsewhere in this report reflects absence of licensing, not "
+                "absence of risk. Sign-in risk and user risk Conditional Access policies also silently "
+                "do nothing without this licence, even if the policy exists and is enabled."
+            ),
+            "remediation_steps": (
+                "Licence Entra ID P2 for at least your privileged/admin population if full-tenant "
+                "licensing is not feasible. Re-run this scan after licensing changes — risky-user "
+                "findings elsewhere in this report only become meaningful once this passes."
+            ),
+            "estimated_effort": "High",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-RISK-LICENSE", "severity": "High", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not check tenant licensing.",
+                "remediation_steps": "Ensure Organization.Read.All or Directory.Read.All permission is granted.",
+                "estimated_effort": "Low"}
+
+
+def check_certificate_based_auth_trust(graph, target_config):
+    """AZURE-CBA-001 — Certificate-based auth trust anchors are scoped and reviewed
+    If Certificate-Based Authentication is enabled, ANY certificate issued by
+    a trusted CA in the trust list can authenticate as a user (matched by
+    UPN/SAN mapping). An overly broad or unreviewed trusted-CA list allows
+    an attacker who compromises (or operates) any trusted CA to mint a
+    valid client certificate and authenticate as any user — including
+    admins — completely bypassing password and MFA prompts."""
+    try:
+        cba_policy = graph.get("/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/X509Certificate")
+        state = cba_policy.get("state", "disabled")
+        if state != "enabled":
+            return {
+                "check_id": "AZURE-CBA-001", "severity": "Low",
+                "status": "passed", "score": 0.0,
+                "affected_resources": [], "evidence": {"cba_enabled": False},
+                "risk_description": "Certificate-based authentication is not enabled — no trust-anchor risk applies.",
+                "remediation_steps": "N/A", "estimated_effort": "Low",
+            }
+        # CBA is enabled — this requires manual review of the trusted CA list,
+        # which is not fully exposed via a simple Graph read in v1.0 for all
+        # tenant configurations. Flag for manual verification rather than
+        # guess at a pass/fail the API can't fully confirm.
+        return {
+            "check_id": "AZURE-CBA-001", "severity": "High",
+            "status": "failed", "score": 5.0,
+            "affected_resources": [{"issue": "Certificate-based authentication is enabled — trust anchor list requires manual review"}],
+            "evidence": {"cba_enabled": True},
+            "risk_description": (
+                "Certificate-based authentication is enabled. Any certificate issued by a CA in the "
+                "trusted list can be used to authenticate, bypassing password and MFA. This is only as "
+                "secure as your trusted CA list and username-binding configuration."
+            ),
+            "remediation_steps": (
+                "Review Entra ID → Security → Certificate-based authentication → Certificate authorities. "
+                "Confirm every listed CA is one your organisation directly controls or a trusted third "
+                "party with strong issuance controls. Verify username binding is configured on the "
+                "strictest available field (e.g. PrincipalName) rather than a broadly-matched field. "
+                "Remove any CA no longer in active use."
+            ),
+            "estimated_effort": "Moderate",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-CBA-001", "severity": "High", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not check certificate-based auth configuration.",
+                "remediation_steps": "Ensure Policy.Read.All permission is granted.",
+                "estimated_effort": "Low"}
+
+
+def check_active_oauth_grants_dangerous_scopes(graph, target_config):
+    """AZURE-CONSENT-002 — Audit ACTIVE OAuth consent grants for dangerous scopes
+    already in effect (not just app registration review). This is distinct
+    from AZURE-APP-007: that check reviews what permissions an app REQUESTS;
+    this checks what has ALREADY BEEN GRANTED and is live right now. A grant
+    made months ago by illicit consent phishing (T1528) remains active and
+    exploitable until explicitly revoked, even if the app's registration
+    looks unremarkable today."""
+    try:
+        DANGEROUS_SCOPES = {
+            "Mail.ReadWrite", "Mail.Send", "Mail.ReadWrite.Shared",
+            "Files.ReadWrite.All", "Directory.ReadWrite.All", "Directory.AccessAsUser.All",
+            "User.ReadWrite.All", "Group.ReadWrite.All", "RoleManagement.ReadWrite.Directory",
+            "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All",
+        }
+        # oauth2PermissionGrants is a navigation property on servicePrincipal —
+        # it is NOT selectable via $select (that either returns nothing or, on
+        # some tenant/API versions, a 400) and querying it per-service-principal
+        # would mean one Graph call per SP, which is slow at scale. The correct
+        # approach is one call against the top-level /oauth2PermissionGrants
+        # collection, which returns every active grant tenant-wide directly,
+        # then join against servicePrincipals locally for display names.
+        sps = graph.get_all_pages("/servicePrincipals?$select=id,displayName,appId")
+        # Defensive: Graph API pagination can occasionally surface a null/
+        # malformed entry for certain tenant configurations. Filtering here
+        # rather than trusting every item is a dict avoids a single bad
+        # entry crashing the whole check with 'NoneType' object has no
+        # attribute 'get' — which then cascades into a poisoned DB
+        # transaction for every check that runs after this one.
+        sp_by_id = {sp.get("id"): sp for sp in sps if isinstance(sp, dict)}
+
+        grants = graph.get_all_pages("/oauth2PermissionGrants?$select=clientId,scope,consentType")
+        grants = [g for g in grants if isinstance(g, dict)]
+
+        risky_grants = []
+        for grant in grants:
+            scopes = set((grant.get("scope") or "").split())
+            hit = scopes & DANGEROUS_SCOPES
+            if hit and grant.get("consentType") == "AllPrincipals":
+                # AllPrincipals = org-wide consent, not scoped to one user —
+                # the highest-impact grant shape
+                sp = sp_by_id.get(grant.get("clientId"), {})
+                risky_grants.append({
+                    "app": sp.get("displayName", "Unknown application"),
+                    "app_id": sp.get("appId", grant.get("clientId")),
+                    "scopes": sorted(hit),
+                    "consent_type": "org-wide",
+                })
+        return {
+            "check_id": "AZURE-CONSENT-002", "severity": "Critical",
+            "status": "passed" if not risky_grants else "failed",
+            "score": 0.0 if not risky_grants else 8.2,
+            "affected_resources": risky_grants[:20],
+            "evidence": {"active_dangerous_grants": len(risky_grants)},
+            "risk_description": (
+                "These OAuth consent grants are ACTIVE RIGHT NOW with organisation-wide scope, meaning "
+                "the app can act on this data for every user without further consent. This is the exact "
+                "mechanic used in illicit consent grant phishing attacks — the malicious app looks "
+                "unremarkable, but the grant persists silently until revoked."
+            ),
+            "remediation_steps": (
+                "For each listed app: verify with the business owner whether this access is still "
+                "needed and was granted deliberately. If not, revoke immediately: Entra ID → Enterprise "
+                "applications → select app → Permissions → Revoke. Then review sign-in and audit logs "
+                "for that service principal's activity history."
+            ),
+            "estimated_effort": "Moderate",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-CONSENT-002", "severity": "Critical", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not audit active OAuth grants.",
+                "remediation_steps": "Ensure Application.Read.All permission is granted.",
+                "estimated_effort": "Low"}
+
+
+def check_break_glass_signin_frequency(graph, target_config):
+    """AZURE-BG-SIGNIN-FREQ — Break glass accounts have NOT signed in recently
+    (inverse logic vs AZURE-BG-001 which checks existence). A break-glass
+    account that IS signing in regularly is either being used for daily
+    operations (defeats its purpose as an emergency-only credential and
+    expands its exposure window) or is a signal of compromise if no
+    legitimate emergency has occurred. Either finding warrants investigation."""
+    try:
+        bg_group_id = (target_config or {}).get("break_glass_group_id", "")
+        if not bg_group_id:
+            return {
+                "check_id": "AZURE-BG-SIGNIN-FREQ", "severity": "Medium",
+                "status": "error", "score": 0.0,
+                "affected_resources": [], "evidence": {"configured": False},
+                "risk_description": "Break glass group not configured in target settings — cannot verify sign-in frequency.",
+                "remediation_steps": "Configure break_glass_group_id in target settings to enable this check.",
+                "estimated_effort": "Low",
+            }
+        members = graph.get_all_pages(f"/groups/{bg_group_id}/members")
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        recent_signins = []
+        for m in members:
+            try:
+                u = graph.get(f"/users/{m['id']}?$select=displayName,userPrincipalName,signInActivity")
+                last = u.get("signInActivity", {}).get("lastSignInDateTime")
+                if last:
+                    last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                    if last_dt > cutoff:
+                        recent_signins.append({"user": u.get("displayName"), "last_signin": last})
+            except Exception:
+                pass
+        return {
+            "check_id": "AZURE-BG-SIGNIN-FREQ", "severity": "Medium",
+            "status": "passed" if not recent_signins else "failed",
+            "score": 0.0 if not recent_signins else 5.5,
+            "affected_resources": recent_signins,
+            "evidence": {"recent_signin_count": len(recent_signins)},
+            "risk_description": (
+                "Break glass accounts have signed in within the last 30 days. If no emergency occurred "
+                "requiring their use, this is a strong indicator of either unauthorised access or "
+                "process drift where the account is being used for routine work — both defeat the "
+                "purpose of a break-glass credential."
+            ),
+            "remediation_steps": (
+                "Investigate each recent sign-in immediately: confirm with your security team whether "
+                "it corresponds to a known, authorised emergency. If not confirmed, treat as a potential "
+                "compromise — rotate the account's credentials immediately and review all activity from "
+                "that session in the audit log."
+            ),
+            "estimated_effort": "Low",
+        }
+    except Exception as e:
+        _err = str(e)
+        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
+        return {"check_id": "AZURE-BG-SIGNIN-FREQ", "severity": "Medium", "status": _status,
+                "score": 0.0, "affected_resources": [], "evidence": {"error": _err},
+                "risk_description": "Could not check break glass sign-in activity.",
+                "remediation_steps": "Ensure AuditLog.Read.All permission is granted.",
+                "estimated_effort": "Low"}
 
 
 ALL_CHECKS = [
+    # ── Threat-informed hardening (federation trust, licence blind spots,
+    #    CBA trust anchors, active dangerous OAuth grants) ────────────────
+    check_federated_domain_trust,
+    check_unverified_domains,
+    check_identity_protection_licensed,
+    check_certificate_based_auth_trust,
+    check_active_oauth_grants_dangerous_scopes,
+    check_break_glass_signin_frequency,
     # ── Conditional Access ─────────────────────────────────────────────────
     check_break_glass_ca_exclusion,
     check_mfa_privileged_roles,
     check_block_legacy_auth,
+    check_block_legacy_auth_v2,   # effective-coverage version, see coverage engine above
     check_high_signin_risk_policy,
     check_ca_compliant_device,
     check_ca_block_risky_signins,
     check_ca_persistent_browser,
     check_ca_security_info_registration,
     check_ca_mfa_all_users,
+    check_ca_mfa_all_users_v2,    # effective-coverage version, see coverage engine above
     check_ca_high_user_risk,
     check_ca_guest_mfa,
     check_ca_block_guest_admin_portals,
@@ -2163,7 +2708,6 @@ ALL_CHECKS = [
     check_tenant_restrictions_configured,
     check_terms_of_use,
     check_no_users_with_default_role_only,
-    check_no_disabled_users_with_roles,
     # ── Applications ───────────────────────────────────────────────────────
     check_app_credential_expiry,
     check_app_assignment_required,
@@ -2228,6 +2772,12 @@ def run_assessment_task(run_id: str, target_id: str):
         graph = GraphClient(tenant_id, client_id, client_secret)
         passed = failed = skipped = 0
 
+        # ── Phase 1: run every check, hold results in memory ────────────────
+        # AI explanation/false-positive analysis needs to see ALL results
+        # before it can apply the priority order (Conditional Access first,
+        # then failed-by-severity, then passed) within the per-scan cap — so
+        # this can no longer happen inline per-check as findings are produced.
+        all_results = []
         for check_fn in ALL_CHECKS:
             try:
                 result = check_fn(graph, config)
@@ -2238,42 +2788,171 @@ def run_assessment_task(run_id: str, target_id: str):
                     failed += 1
                 else:
                     skipped += 1
+                all_results.append(result)
+            except Exception as e:
+                # Full traceback, not just the exception message — a bare
+                # "'tuple' object has no attribute 'get'" gives no clue which
+                # line inside the check (or inside a shared helper it calls)
+                # actually produced a tuple where a dict was expected. This
+                # has cost real debugging time twice already this session for
+                # checks that DO have their own try/except but still failed
+                # here, meaning the error originates in a shared call path
+                # (get_all_pages, get_conditional_access_policies, etc.)
+                # rather than inside the check function's own try block.
+                import traceback
+                log.error(f"Check {check_fn.__name__} failed: {e}\n{traceback.format_exc()}")
+                skipped += 1
 
-                # Upsert finding
+        # ── Phase 2: AI explanation + false-positive analysis, capped ───────
+        # Fully optional — no-ops entirely unless AI_EXPLAIN_ENABLED=true and
+        # a provider is configured. See ai_explainer.py for the full boundary
+        # documentation. Selection order: Conditional Access checks first,
+        # then remaining FAILED findings by severity/score, then PASSED
+        # findings if budget remains — up to AI_EXPLAIN_MAX_PER_SCAN total.
+        ai_summary_text = None
+        try:
+            # Import as app.ai_explainer, not bare ai_explainer — Celery starts
+            # this worker as `celery -A app.tasks` with WORKDIR=/app, so the
+            # module is addressed as app.ai_explainer at runtime, matching how
+            # app.tasks itself is addressed. A bare `from ai_explainer import`
+            # only works if /app/app is directly on sys.path, which it isn't
+            # in this container's actual runtime — this was silently failing
+            # every scan with "No module named 'ai_explainer'" despite the
+            # file being present on disk in the correct location.
+            from app.ai_explainer import select_findings_to_explain, explain_finding_sync, summarise_scan_sync
+
+            to_explain = select_findings_to_explain(all_results)
+
+            # Investigative agent — opt-in, separate from the base explainer.
+            # Runs on a SMALLER subset (AI_AGENT_MAX_FINDINGS_PER_SCAN,
+            # default 5) since each agent investigation costs multiple LLM
+            # calls (up to AI_AGENT_MAX_TOOL_CALLS+1) versus one call for the
+            # plain explainer. Findings selected for agent investigation are
+            # excluded from the plain explainer loop below, so no finding
+            # gets both (wasteful) or neither.
+            agent_ids = set()
+            try:
+                from app.ai_agent import (AI_AGENT_ENABLED, AI_AGENT_MAX_FINDINGS_PER_SCAN,
+                                           investigate_finding, resolve_agent_provider_config)
+                if AI_AGENT_ENABLED:
+                    agent_provider, provider_cfg = resolve_agent_provider_config()
+                    if agent_provider:
+                        to_investigate = to_explain[:AI_AGENT_MAX_FINDINGS_PER_SCAN]
+                        agent_ids = {id(f) for f in to_investigate}
+                        for result in to_investigate:
+                            investigate_finding(result, graph, agent_provider, provider_cfg)
+                            import time as _time
+                            _time.sleep(0.5)
+                        if to_investigate:
+                            log.info(f"Agent-investigated {len(to_investigate)}/{len(all_results)} "
+                                      f"findings for scan {run_id} via {agent_provider}")
+            except Exception as _agent_err:
+                log.warning(f"Agent investigation phase skipped for scan {run_id}: {_agent_err}")
+
+            for result in to_explain:
+                if id(result) in agent_ids:
+                    continue  # already handled by the agent above
+                explain_finding_sync(result)  # mutates result in place, adds ai_* keys only
+                # Small pacing delay between calls — free-tier providers (Groq
+                # in particular) enforce requests-per-minute limits, and firing
+                # 15-30 calls in a couple of seconds reliably trips a 429 on
+                # the LAST call in the batch (which was always the summary
+                # call, since it runs after every per-finding call) even
+                # though the individual explanation calls themselves succeed.
+                # This keeps total added time modest (well under a minute for
+                # the default cap of 30) while giving rate limiters real
+                # breathing room.
+                import time as _time
+                _time.sleep(0.5)
+
+            if to_explain:
+                log.info(f"AI-explained {len(to_explain)}/{len(all_results)} findings for scan {run_id}")
+
+            ai_summary_text = summarise_scan_sync(all_results, len(all_results), passed, failed, skipped)
+        except Exception as _ai_err:
+            log.warning(f"AI explanation phase skipped for scan {run_id}: {_ai_err}")
+
+        # ── Phase 3: persist every finding ───────────────────────────────────
+        for result in all_results:
+            try:
                 conn.execute(text("""
                     INSERT INTO findings (id, scan_run_id, target_id, check_id, status, severity, score,
                         affected_resources, evidence, risk_description, remediation_steps,
-                        estimated_effort, first_seen_at, last_seen_at, created_at, updated_at)
+                        estimated_effort, ai_explanation, ai_false_positive_likelihood,
+                        ai_false_positive_reason, ai_queries_made, first_seen_at, last_seen_at, created_at, updated_at)
                     VALUES (:id, :run_id, :target_id, :check_id, :status, :severity, :score,
                         cast(:affected as jsonb), cast(:evidence as jsonb),
-                        :risk, :remediation, :effort, now(), now(), now(), now())
+                        :risk, :remediation, :effort, :ai_explanation, :ai_fp_likelihood,
+                        :ai_fp_reason, :ai_queries, now(), now(), now(), now())
                     ON CONFLICT DO NOTHING
                 """), {
                     "id": str(uuid.uuid4()), "run_id": run_id, "target_id": target_id,
                     "check_id": result["check_id"], "status": result["status"],
                     "severity": result.get("severity", "Medium"),
                     "score": result.get("score", 0.0),
-                    "affected": __import__("json").dumps(result.get("affected_resources", [])),
-                    "evidence": __import__("json").dumps(result.get("evidence", {})),
+                    "affected": __import__("json").dumps(result.get("affected_resources", []), default=str),
+                    "evidence": __import__("json").dumps(result.get("evidence", {}), default=str),
                     "risk": result.get("risk_description", ""),
                     "remediation": result.get("remediation_steps", ""),
                     "effort": result.get("estimated_effort", "Low"),
+                    "ai_explanation": result.get("ai_explanation"),
+                    "ai_fp_likelihood": result.get("ai_false_positive_likelihood"),
+                    "ai_fp_reason": result.get("ai_false_positive_reason"),
+                    "ai_queries": __import__("json").dumps(result.get("ai_queries_made")) if result.get("ai_queries_made") else None,
                 })
                 conn.commit()
-
-            except Exception as e:
-                log.error(f"Check {check_fn.__name__} failed: {e}")
+            except Exception as insert_err:
+                # Log the SPECIFIC check_id and error that caused the INSERT to
+                # fail, before rolling back — otherwise this information is lost
+                # and every subsequent failure looks identical, masking which
+                # finding actually caused the original problem.
+                log.error(
+                    f"INSERT failed for check_id={result.get('check_id')} "
+                    f"status={result.get('status')} score={result.get('score')!r} "
+                    f"score_type={type(result.get('score')).__name__}: {insert_err}"
+                )
+                # CRITICAL: without this rollback, a single failed INSERT poisons
+                # the connection for the rest of the scan — every subsequent
+                # statement (remaining inserts, the completion UPDATE) fails
+                # with InFailedSqlTransaction, and the run gets stuck at
+                # status='running' forever. Rolling back lets the connection
+                # recover and the loop continue normally.
+                try:
+                    conn.rollback()
+                except Exception as rollback_err:
+                    log.error(f"Rollback also failed after check_id={result.get('check_id')}: {rollback_err}")
                 skipped += 1
 
         total = passed + failed + skipped
-        conn.execute(text("""
-            UPDATE scan_runs
-            SET status='completed', completed_at=now(),
-                checks_total=:total, checks_passed=:passed,
-                checks_failed=:failed, checks_skipped=:skipped
-            WHERE id=:id
-        """), {"id": run_id, "total": total, "passed": passed, "failed": failed, "skipped": skipped})
-        conn.commit()
+        try:
+            conn.execute(text("""
+                UPDATE scan_runs
+                SET status='completed', completed_at=now(),
+                    checks_total=:total, checks_passed=:passed,
+                    checks_failed=:failed, checks_skipped=:skipped,
+                    ai_summary=:ai_summary
+                WHERE id=:id
+            """), {"id": run_id, "total": total, "passed": passed, "failed": failed,
+                   "skipped": skipped, "ai_summary": ai_summary_text})
+            conn.commit()
+        except Exception as e:
+            # Last resort: if even the completion update fails (e.g. connection
+            # still broken for some other reason), roll back and try to at
+            # least mark the run as failed rather than leaving it stuck at
+            # 'running' indefinitely with no way for the UI to know it's dead.
+            log.error(f"Failed to mark scan {run_id} as completed: {e}")
+            try:
+                conn.rollback()
+                conn.execute(text("""
+                    UPDATE scan_runs SET status='failed', completed_at=now(),
+                        error_message=:err, checks_total=:total, checks_passed=:passed,
+                        checks_failed=:failed, checks_skipped=:skipped
+                    WHERE id=:id
+                """), {"id": run_id, "err": str(e)[:500], "total": total,
+                       "passed": passed, "failed": failed, "skipped": skipped})
+                conn.commit()
+            except Exception as e2:
+                log.error(f"Could not even mark scan {run_id} as failed: {e2}")
 
     log.info(f"Scan {run_id} complete: {passed} passed, {failed} failed, {skipped} skipped")
 
@@ -2317,7 +2996,7 @@ def check_pim_notification_alerts(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_guest_global_admin(graph, target_config):
     """AZURE-GUEST-005 — No guest users assigned privileged roles"""
@@ -2351,7 +3030,7 @@ def check_no_guest_global_admin(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_shared_accounts(graph, target_config):
     """AZURE-IDENTITY-011 — No shared/generic accounts in privileged roles"""
@@ -2386,7 +3065,7 @@ def check_no_shared_accounts(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_privileged_role_count(graph, target_config):
     """AZURE-PRIV-005 — Total privileged role assignments are minimised"""
@@ -2422,7 +3101,7 @@ def check_privileged_role_count(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_app_multitenant_disabled(graph, target_config):
     """AZURE-APP-008 — Applications are not unnecessarily multi-tenant"""
@@ -2454,7 +3133,7 @@ def check_app_multitenant_disabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_app_implicit_flow_disabled(graph, target_config):
     """AZURE-APP-009 — Applications do not use implicit grant flow"""
@@ -2488,7 +3167,7 @@ def check_app_implicit_flow_disabled(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_reply_url_wildcards(graph, target_config):
     """AZURE-APP-010 — No wildcard redirect URIs in app registrations"""
@@ -2524,7 +3203,7 @@ def check_no_reply_url_wildcards(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_conditional_access_policy_count(graph, target_config):
     """AZURE-CA-015 — Sufficient CA policies are configured"""
@@ -2553,7 +3232,7 @@ def check_conditional_access_policy_count(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_directory_role_assignments_reviewed(graph, target_config):
     """AZURE-PRIV-006 — All directory role assignments are documented"""
@@ -2584,7 +3263,7 @@ def check_directory_role_assignments_reviewed(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_sign_in_logs_retained(graph, target_config):
     """AZURE-MONITORING-005 — Sign-in logs are being generated and accessible"""
@@ -2619,7 +3298,7 @@ def check_sign_in_logs_retained(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_emergency_access_monitored(graph, target_config):
     """AZURE-MONITORING-004 — Break glass account sign-ins are alerted"""
@@ -2657,7 +3336,7 @@ def check_emergency_access_monitored(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_admin_mfa_methods_strong(graph, target_config):
     """AZURE-MFA-010 — Admins use strong MFA methods (not just SMS)"""
@@ -2697,7 +3376,7 @@ def check_admin_mfa_methods_strong(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_license_p2_available(graph, target_config):
     """AZURE-IDENTITY-012 — Entra ID P2 licences available for security features"""
@@ -2729,7 +3408,7 @@ def check_license_p2_available(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_legacy_auth_successful(graph, target_config):
     """AZURE-MONITORING-006 — No successful legacy auth sign-ins in last 30 days"""
@@ -2759,7 +3438,7 @@ def check_no_legacy_auth_successful(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_token_lifetime_policy(graph, target_config):
     """AZURE-CA-016 — Token lifetime policies configured"""
@@ -2786,7 +3465,7 @@ def check_token_lifetime_policy(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_continuous_access_evaluation(graph, target_config):
     """AZURE-CA-017 — Continuous Access Evaluation enabled"""
@@ -2816,7 +3495,7 @@ def check_continuous_access_evaluation(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_no_expired_service_principal_secrets(graph, target_config):
     """AZURE-APP-011 — No service principals with expired credentials"""
@@ -2854,7 +3533,7 @@ def check_no_expired_service_principal_secrets(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_b2c_policies_reviewed(graph, target_config):
     """AZURE-IDENTITY-014 — External authentication policies reviewed"""
@@ -2882,7 +3561,7 @@ def check_b2c_policies_reviewed(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_privileged_role_separation(graph, target_config):
     """AZURE-PRIV-007 — Privileged and normal work accounts are separate"""
@@ -2918,7 +3597,7 @@ def check_privileged_role_separation(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_app_registration_count(graph, target_config):
     """AZURE-APP-012 — App registration count is reasonable"""
@@ -2947,7 +3626,7 @@ def check_app_registration_count(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_mfa_fraud_alert(graph, target_config):
     """AZURE-MFA-011 — MFA fraud alert configured"""
@@ -2976,7 +3655,7 @@ def check_mfa_fraud_alert(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_group_owners_exist(graph, target_config):
     """AZURE-GROUP-006 — All groups have at least one owner"""
@@ -3011,7 +3690,7 @@ def check_group_owners_exist(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 EXTRA_CHECKS = [
     check_pim_notification_alerts,
@@ -3078,7 +3757,7 @@ def check_block_dirsync_untrusted(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_require_approver(graph, target_config):
     """AZURE-PIM-APPROVER — Require approver for high-privilege role activation"""
@@ -3117,7 +3796,7 @@ def check_pim_require_approver(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_remove_stale_dirsync_accounts(graph, target_config):
     """AZURE-IDENTITY-DIRSYNC — Remove unused directory synchronization accounts"""
@@ -3154,7 +3833,7 @@ def check_remove_stale_dirsync_accounts(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_block_security_reg_on_risk(graph, target_config):
     """AZURE-CA-SECREG — Block security info registration when sign-in risk detected"""
@@ -3186,7 +3865,7 @@ def check_block_security_reg_on_risk(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_block_admin_portals_on_risk(graph, target_config):
     """AZURE-CA-ADMINRISK — Block admin portal access when sign-in risk detected"""
@@ -3218,7 +3897,7 @@ def check_block_admin_portals_on_risk(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_mfa_on_activation(graph, target_config):
     """AZURE-PIM-MFA — PIM requires MFA on role activation"""
@@ -3252,7 +3931,7 @@ def check_pim_mfa_on_activation(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_ca_persistent_session_guest(graph, target_config):
     """AZURE-CA-GUESTSESSION — Configure session timeout for guests"""
@@ -3284,7 +3963,7 @@ def check_ca_persistent_session_guest(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_ca_unmanaged_device_session(graph, target_config):
     """AZURE-CA-UNMGDSESSION — Require non-persistent session for unmanaged devices"""
@@ -3316,7 +3995,7 @@ def check_ca_unmanaged_device_session(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_ca_exclusion_groups(graph, target_config):
     """AZURE-CA-EXCLUSIONS — CA exclusions use dedicated groups"""
@@ -3352,7 +4031,7 @@ def check_ca_exclusion_groups(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_remove_admin_mailboxes(graph, target_config):
     """AZURE-PRIV-MAILBOX — Privileged admins should not have mailboxes on admin accounts"""
@@ -3396,7 +4075,7 @@ def check_remove_admin_mailboxes(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_block_msol_powershell(graph, target_config):
     """AZURE-CA-MSOL — Block access to MSOL/legacy PowerShell endpoints"""
@@ -3439,7 +4118,7 @@ def check_block_msol_powershell(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_stale_cloud_only_users(graph, target_config):
     """AZURE-IDENTITY-STALE — Disable or remove stale cloud-only users"""
@@ -3481,7 +4160,7 @@ def check_stale_cloud_only_users(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_app_http_redirect_uris(graph, target_config):
     """AZURE-APP-HTTP — Application redirect URIs not using HTTPS"""
@@ -3515,7 +4194,7 @@ def check_app_http_redirect_uris(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_max_activation_duration(graph, target_config):
     """AZURE-PIM-DURATION — PIM maximum activation duration per best practice"""
@@ -3554,7 +4233,7 @@ def check_pim_max_activation_duration(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_remove_personal_email_from_admins(graph, target_config):
     """AZURE-PRIV-PERSONALEMAIL — Remove personal email from admin accounts"""
@@ -3595,7 +4274,7 @@ def check_remove_personal_email_from_admins(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_service_principals_not_admins(graph, target_config):
     """AZURE-PRIV-SP — Service principals should not be in privileged roles"""
@@ -3628,7 +4307,7 @@ def check_service_principals_not_admins(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_bg_password_rotation(graph, target_config):
     """AZURE-BG-ROTATION — Break glass account passwords changed regularly"""
@@ -3672,7 +4351,7 @@ def check_bg_password_rotation(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_all_users_group_apps(graph, target_config):
     """AZURE-APP-ALLUSERS — Review apps assigned to All Users group"""
@@ -3725,7 +4404,7 @@ def check_all_users_group_apps(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_pim_two_approvers(graph, target_config):
     """AZURE-PIM-2APPROVERS — At least 2 approvers for high-privilege PIM activation"""
@@ -3764,7 +4443,7 @@ def check_pim_two_approvers(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_workload_identity_risk(graph, target_config):
     """AZURE-APP-WORKLOADRISK — Block service principals with risk detections"""
@@ -3796,7 +4475,7 @@ def check_workload_identity_risk(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_stale_risky_users_dismissed(graph, target_config):
     """AZURE-RISK-STALE — Dismiss stale risky user status"""
@@ -3832,49 +4511,19 @@ def check_stale_risky_users_dismissed(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
-
-def check_ca_block_guest_admin_portals(graph, target_config):
-    """AZURE-CA-GUESTADMIN — Block guest access to Microsoft admin portals"""
-    try:
-        policies = graph.get_all_pages("/identity/conditionalAccess/policies")
-        guest_admin_block = [
-            p for p in policies if p.get("state")=="enabled"
-            and "GuestsOrExternalUsers" in str(p.get("conditions",{}).get("users",{}))
-            and "MicrosoftAdminPortals" in str(p.get("conditions",{}).get("applications",{}).get("includeApplications",[]))
-            and "block" in str(p.get("grantControls",{}).get("builtInControls",[])).lower()
-        ]
-        return {
-            "check_id":"AZURE-CA-GUESTADMIN","severity":"High",
-            "status":"passed" if guest_admin_block else "failed",
-            "score":0.0 if guest_admin_block else 3.2,
-            "affected_resources":[] if guest_admin_block else [{"issue":"No CA policy blocking guests from admin portals"}],
-            "evidence":{"blocking_policies":len(guest_admin_block)},
-            "risk_description":"Guests accessing Microsoft Admin Portals can view sensitive tenant configuration, billing information, and user directory data. This access is almost never legitimately needed by external users.",
-            "remediation_steps":"Create CA policy: Users → Guest or external users → All. Cloud apps → Microsoft Admin Portals. Grant → Block access. This prevents all guests from accessing Azure Portal, M365 Admin Center, and Exchange Admin.",
-            "estimated_effort":"Low",
         }
-    except Exception as e:
-        _err = str(e)
-        _status = "failed" if ("403" in _err or "Forbidden" in _err) else "error"
-        _rem = ("Grant the required Microsoft Graph API permission and click 'Grant admin consent' in the Azure Portal." if _status == "failed" else "Check the worker logs for details.")
-        return {
-            "check_id": "AZURE-CA-GUESTADMIN", "severity": "High",
-            "status": _status, "score": 0.0, "affected_resources": [],
-            "evidence": {"error": _err},
-            "risk_description": "Check failed to run.",
-            "remediation_steps": _rem,
-            "estimated_effort": "Low",
-        },
 
 def check_users_lockout_count(graph, target_config):
     """AZURE-MONITORING-LOCKOUT — Review users with high lockout counts"""
     try:
-        # Check sign-in logs for users with many failed auth attempts
-        logs = graph.get("/auditLogs/directoryAudits?$filter=activityDisplayName eq 'Sign-in activity'&$top=1")
+        # Smart-lockout sign-ins (error 50053) from the sign-in log. This used
+        # to query directoryAudits with $top=1, which could never reach the
+        # threshold below, so the check passed unconditionally.
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        logs = graph.get(f"/auditLogs/signIns?$filter=status/errorCode eq 50053 and createdDateTime ge {since}&$top=999")
         locked_users = {}
-        for log in logs.get("value",[]):
-            upn = log.get("userPrincipalName","")
+        for entry in logs.get("value") or []:
+            upn = entry.get("userPrincipalName","")
             if upn:
                 locked_users[upn] = locked_users.get(upn,0) + 1
         high_lockout = [{"upn":k,"lockout_events":v} for k,v in locked_users.items() if v >= 3]
@@ -3899,16 +4548,17 @@ def check_users_lockout_count(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_delete_empty_groups(graph, target_config):
     """AZURE-GROUP-EMPTY — Delete empty cloud-only groups"""
     try:
-        groups = graph.get_all_pages("/groups?$select=id,displayName,groupTypes,membershipType&$filter=NOT(groupTypes/any(t:t eq 'DynamicMembership'))")
+        _advanced = {"ConsistencyLevel": "eventual"}  # required for NOT filters and /$count
+        groups = graph.get_all_pages("/groups?$select=id,displayName,groupTypes&$filter=NOT(groupTypes/any(t:t eq 'DynamicMembership'))&$count=true", headers=_advanced)
         empty_groups = []
         for g in groups[:50]:
             try:
-                count_resp = graph.get(f"/groups/{g['id']}/members/$count")
+                count_resp = graph.get(f"/groups/{g['id']}/members/$count", headers=_advanced)
                 # count_resp may return integer directly
                 if isinstance(count_resp, int) and count_resp == 0:
                     empty_groups.append({"group":g.get("displayName"),"id":g.get("id")})
@@ -3935,7 +4585,7 @@ def check_delete_empty_groups(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 def check_block_ca_without_exclusion(graph, target_config):
     """AZURE-CA-BLOCKEXCL — Block CA policies should have exclusion groups"""
@@ -3972,7 +4622,7 @@ def check_block_ca_without_exclusion(graph, target_config):
             "risk_description": "Check failed to run.",
             "remediation_steps": _rem,
             "estimated_effort": "Low",
-        },
+        }
 
 
 # ─── Add all new checks to ALL_CHECKS ────────────────────────────────────────
@@ -3998,7 +4648,6 @@ WORKSHEET_CHECKS = [
     check_pim_two_approvers,
     check_workload_identity_risk,
     check_stale_risky_users_dismissed,
-    check_ca_block_guest_admin_portals,
     check_users_lockout_count,
     check_delete_empty_groups,
     check_block_ca_without_exclusion,
