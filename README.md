@@ -403,6 +403,8 @@ If you deploy to an AMD64 server and see platform mismatch warnings, add `platfo
 | `AUTH_ENABLED` | `true` | Enable login wall. Set `false` only for local dev. |
 | `LOCAL_ADMIN_USERNAME` | — | Username for the built-in local admin account |
 | `LOCAL_ADMIN_PASSWORD` | — | Password for the built-in local admin account |
+| `SECRET_KEY` | — | JWT signing key. With `AUTH_ENABLED=true` the API **refuses to start** unless this is ≥ 32 random characters (`openssl rand -hex 32`) |
+| `MSAL_ADMIN_USERS` | — | Comma-separated UPNs that get the admin role on Microsoft sign-in. Everyone else starts as a viewer |
 | `JWT_EXPIRE_HOURS` | `8` | Session token lifetime in hours |
 | `APP_BASE_URL` | `http://localhost:3000` | Public URL of the dashboard (used for SSO redirect URIs) |
 
@@ -555,7 +557,13 @@ docker exec entra-guard-api env | grep -E "AUTH_ENABLED|LOCAL_ADMIN"
 docker compose logs api --tail=50 | grep -i auth
 ```
 
+### Roles
+
+There are two roles: **admin** and **viewer**. Viewers can read findings, runs and targets. Only admins can start scans, create/edit/delete targets, and manage users — the API returns `403` to viewers for those calls.
+
 ### Microsoft SSO (Pending HTTPS)
+
+Users who sign in with Microsoft are **viewers by default**. List the UPNs that should be admins in `MSAL_ADMIN_USERS`, or promote them later from the Users page (they appear there as `msal:<upn>` after their first sign-in). The OAuth `state` parameter is verified on callback.
 
 Microsoft Entra ID SSO is implemented in the codebase but requires an HTTPS redirect URI. Azure Portal rejects HTTP redirect URIs for any non-localhost origin. To enable SSO:
 
@@ -954,7 +962,7 @@ Quick summary:
 2. Create a feature branch: `git checkout -b feature/my-check`
 3. Add your check function to `tasks.py` and register it in `ALL_CHECKS`
 4. Add remediation text to `App.tsx` under `REM`
-5. Test against a real or demo tenant
+5. Run the unit tests (see [CONTRIBUTING.md](CONTRIBUTING.md#running-the-tests)) and test against a real or demo tenant
 6. Open a pull request describing what the check tests and why it matters
 
 ---

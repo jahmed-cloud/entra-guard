@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r services/api/requirements.txt -r services/assessment-engine/requirements.txt pytest
+      # Both services have a top-level package named `app`, so run them separately.
+      - run: python -m pytest tests
+        working-directory: services/api
+      - run: python -m pytest tests
+        working-directory: services/assessment-engine
+
+  web-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci && npx tsc --noEmit -p . && npm run build
+        working-directory: services/web-ui

@@ -13,6 +13,7 @@ Thank you for considering a contribution to EntraGuard! This document explains h
 - [Improving Remediation Content](#improving-remediation-content)
 - [UI Contributions](#ui-contributions)
 - [Pull Request Process](#pull-request-process)
+- [Running the tests](#running-the-tests)
 - [Coding Standards](#coding-standards)
 - [Reporting Bugs](#reporting-bugs)
 - [Requesting Features](#requesting-features)
@@ -189,6 +190,8 @@ In `services/web-ui/src/App.tsx`, find the `REM` dictionary and add an entry:
 
 ### Step 5: Test your check
 
+First run the unit tests — `services/assessment-engine/tests/test_checks.py` runs every registered check against an empty fake tenant and fails if any check returns a malformed result or reuses another check's ID (see [Running the tests](#running-the-tests)). Then test against a real tenant:
+
 ```bash
 # Deploy and test
 docker cp services/assessment-engine/app/tasks.py entra-guard-worker:/app/app/tasks.py
@@ -288,8 +291,25 @@ When contributing UI changes:
 - [ ] Check is registered in `ALL_CHECKS`
 - [ ] `REM` entry added in `App.tsx` with title, risk, steps, and ref
 - [ ] Error handling returns `status: "error"` not an exception
+- [ ] Unit tests pass for both services (`pytest services/api/tests`, `pytest services/assessment-engine/tests`)
 - [ ] Tested against a real or demo Entra ID tenant
 - [ ] No `print()` statements left in code (use `log.info()`)
+
+---
+
+## Running the tests
+
+The API and the assessment engine each have a top-level package called `app`, so run their test suites separately. No database, Redis, or Azure tenant is needed — Graph calls are faked and the API tests never touch Postgres.
+
+```bash
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r services/api/requirements.txt -r services/assessment-engine/requirements.txt pytest
+(cd services/api && python -m pytest tests)
+(cd services/assessment-engine && python -m pytest tests)
+(cd services/web-ui && npm ci && npm run build)
+```
+
+The same commands run in GitHub Actions on every push and pull request (`.github/workflows/ci.yml`).
 
 ---
 

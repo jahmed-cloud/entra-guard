@@ -66,10 +66,14 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       LOCAL_ADMIN_USERNAME: ${LOCAL_ADMIN_USERNAME:-admin}
       LOCAL_ADMIN_PASSWORD: ${LOCAL_ADMIN_PASSWORD:-}
+      MSAL_ADMIN_USERS: ${MSAL_ADMIN_USERS:-}
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-8}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       INSTANCE_NAME: ${INSTANCE_NAME:-EntraGuard}
       TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+
+    volumes:
+      - users_data:/app/data
 
     depends_on:
       postgres:
@@ -100,6 +104,34 @@ services:
       ENTRA_TENANT_ID: ${AZURE_TENANT_ID}
       ENTRA_CLIENT_ID: ${AZURE_CLIENT_ID}
       ENTRA_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+
+      AI_EXPLAIN_ENABLED: ${AI_EXPLAIN_ENABLED:-false}
+      AI_EXPLAIN_PROVIDER: ${AI_EXPLAIN_PROVIDER:-anthropic}
+      AI_EXPLAIN_MAX_PER_SCAN: ${AI_EXPLAIN_MAX_PER_SCAN:-30}
+      AI_AGENT_ENABLED: ${AI_AGENT_ENABLED:-false}
+      AI_AGENT_MAX_TOOL_CALLS: ${AI_AGENT_MAX_TOOL_CALLS:-3}
+      AI_AGENT_MAX_FINDINGS_PER_SCAN: ${AI_AGENT_MAX_FINDINGS_PER_SCAN:-5}
+      AI_AGENT_MODEL_GROQ: ${AI_AGENT_MODEL_GROQ:-}
+      AI_AGENT_MODEL_OLLAMA: ${AI_AGENT_MODEL_OLLAMA:-}
+      AI_AGENT_MODEL_OPENAI: ${AI_AGENT_MODEL_OPENAI:-}
+      AI_AGENT_MAX_SECONDS_PER_FINDING: ${AI_AGENT_MAX_SECONDS_PER_FINDING:-90}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      AI_EXPLAIN_MODEL_ANTHROPIC: ${AI_EXPLAIN_MODEL_ANTHROPIC:-}
+      AI_EXPLAIN_MODEL_OPENAI: ${AI_EXPLAIN_MODEL_OPENAI:-}
+      AI_EXPLAIN_MODEL_GROQ: ${AI_EXPLAIN_MODEL_GROQ:-}
+      AI_EXPLAIN_MODEL_OLLAMA: ${AI_EXPLAIN_MODEL_OLLAMA:-}
+      AI_EXPLAIN_CHECK_IDS: ${AI_EXPLAIN_CHECK_IDS:-}
+
+    extra_hosts:
+      # Required on Linux Docker hosts for host.docker.internal to resolve —
+      # Docker Desktop (Mac/Windows) provides this automatically, but native
+      # Linux Docker does not. Harmless no-op if you're not using Ollama.
+      - "host.docker.internal:host-gateway"
 
     depends_on:
       postgres:
@@ -164,3 +196,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  users_data:

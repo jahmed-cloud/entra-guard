@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
-from app.auth.router import require_auth, create_token
+from app.auth.router import AUTH_ENABLED, require_admin, create_token, constant_time_equals
+from app.auth.models import LoginRequest
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,19 +29,35 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     active: Optional[bool] = None
 
+# PBKDF2-HMAC-SHA256 — stdlib only, so no new dependency. Hashes created
+# before this change were a single salted SHA-256 ("salt:hex"), which is
+# GPU-crackable; verify_password still accepts them and extended_login
+# transparently re-hashes on the next successful sign-in.
+_PBKDF2_ITERATIONS = 600_000
+
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
-    h = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
-    return f"{salt}:{h}"
+    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PBKDF2_ITERATIONS).hex()
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt}${h}"
+
+def is_legacy_hash(stored: str) -> bool:
+    return not stored.startswith("pbkdf2_sha256$")
 
 def verify_password(password: str, stored: str) -> bool:
     try:
-        salt, h = stored.split(":", 1)
-        return secrets.compare_digest(
-            hashlib.sha256(f"{salt}:{password}".encode()).hexdigest(), h
-        )
+        if not is_legacy_hash(stored):
+            _, iterations, salt, h = stored.split("$", 3)
+            candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(iterations)).hex()
+        else:
+            salt, h = stored.split(":", 1)
+            candidate = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+        return secrets.compare_digest(candidate, h)
     except Exception:
         return False
+
+def msal_store_key(upn: str) -> str:
+    # Prefixed so an MSAL identity can never collide with a local username.
+    return f"msal:{upn.lower()}"
 
 def load_users() -> dict:
     # Always include the local admin from env as a built-in user
@@ -76,11 +93,6 @@ def save_users(users: dict):
         log.error(f"Could not save users file: {e}")
         raise HTTPException(500, "Could not save user data")
 
-def require_admin(user=Depends(require_auth)):
-    if user.get("role") not in ["admin"] and user.get("auth_type") not in ["local", "msal"]:
-        raise HTTPException(403, "Admin access required")
-    return user
-
 @router.get("/users")
 async def list_users(user=Depends(require_admin)):
     users = load_users()
@@ -101,6 +113,8 @@ async def create_user(req: UserCreate, user=Depends(require_admin)):
     users = load_users()
     if req.username in users:
         raise HTTPException(409, f"User '{req.username}' already exists")
+    if req.username.startswith("msal:"):
+        raise HTTPException(400, "Usernames starting with 'msal:' are reserved for Microsoft sign-in")
     if len(req.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     if req.role not in ["admin", "viewer"]:
@@ -131,6 +145,8 @@ async def update_user(username: str, req: UserUpdate, user=Depends(require_admin
     if req.name is not None:
         u["name"] = req.name
     if req.password is not None:
+        if u.get("auth_type") == "msal":
+            raise HTTPException(400, "Microsoft sign-in accounts don't have a local password")
         if len(req.password) < 8:
             raise HTTPException(400, "Password must be at least 8 characters")
         u["password_hash"] = hash_password(req.password)
@@ -162,15 +178,17 @@ async def delete_user(username: str, user=Depends(require_admin)):
 
 # Login endpoint that checks the users file too
 @router.post("/auth/login/extended")
-async def extended_login(req: dict):
+async def extended_login(req: LoginRequest):
     """Login that checks both env admin and users file"""
-    username = req.get("username", "")
-    password = req.get("password", "")
+    if not AUTH_ENABLED:
+        raise HTTPException(400, "Authentication is not enabled")
+    username = req.username.strip()
+    password = req.password
 
     # Check env admin first
     env_admin = os.getenv("LOCAL_ADMIN_USERNAME", "admin")
     env_pass = os.getenv("LOCAL_ADMIN_PASSWORD", "")
-    if secrets.compare_digest(username, env_admin) and secrets.compare_digest(password, env_pass) and env_pass:
+    if env_pass and constant_time_equals(username, env_admin) and constant_time_equals(password, env_pass):
         token = create_token({"sub": username, "name": "Local Administrator", "auth_type": "local", "role": "admin"})
         return {"access_token": token, "token_type": "bearer",
                 "user": {"sub": username, "name": "Local Administrator", "auth_type": "local", "role": "admin"}}
@@ -185,6 +203,10 @@ async def extended_login(req: dict):
             raise HTTPException(401, "Invalid credentials")
         pw_hash = u.get("password_hash", "")
         if pw_hash and verify_password(password, pw_hash):
+            if is_legacy_hash(pw_hash):
+                u["password_hash"] = hash_password(password)
+                save_users(users)
+                log.info(f"Upgraded legacy password hash for {username}")
             user_info = {"sub": username, "name": u.get("name", username),
                         "auth_type": "local", "role": u.get("role", "viewer")}
             token = create_token(user_info)

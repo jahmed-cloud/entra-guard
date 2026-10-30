@@ -3,14 +3,107 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "/api/v1";
-const apiFetch = async (p) => { const r = await fetch(API+p); if(!r.ok) throw new Error(r.status); return r.json(); };
-const apiPost  = async (p, b={}) => { const r = await fetch(API+p, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}); if(!r.ok) throw new Error(r.status); return r.json(); };
+// Both apiFetch and apiPost now attach the stored Bearer token via
+// getStoredToken() (declared below — safe to reference here since function
+// declarations are hoisted). Previously these sent no Authorization header
+// at all, so every call through them (findings, targets, runs, scan trigger)
+// was silently unauthenticated — harmless while those endpoints had no auth
+// check, but a real bug once AUTH_ENABLED=true genuinely enforces it.
+const apiFetch = async (p) => {
+  const token = getStoredToken();
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  const r = await fetch(API+p, { headers });
+  if (r.status === 401) { clearStoredToken(); window.location.href = "/"; }
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+};
+const apiPost = async (p, b={}) => {
+  const token = getStoredToken();
+  const headers = { "Content-Type":"application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) };
+  const r = await fetch(API+p, {method:"POST", headers, body:JSON.stringify(b)});
+  if (r.status === 401) { clearStoredToken(); window.location.href = "/"; }
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+};
+
+// ─── Material Design 3 tokens ─────────────────────────────────────────────────
+// Dark theme, tonal surface system. Elevation communicates hierarchy of
+// attention (critical findings sit visually "closer" to the viewer);
+// severity colors are MD3-desaturated so they read as part of the surface
+// system rather than fighting it.
+const MD = {
+  // Surface roles — each step lighter = higher elevation
+  surfaceDim:    "#0E1116",
+  surface:       "#121417",
+  surfaceLow:    "#191C20",
+  surfaceCont:   "#1D2024",
+  surfaceHigh:   "#282A2F",
+  surfaceHighest:"#33353A",
+  outline:       "#8B9198",
+  outlineVar:    "#42474E",
+  // Primary — confident blue-violet, MD3's "vivid but not neon" register
+  primary:       "#AEC6FF",
+  primaryDim:    "#5B8DFF",
+  primaryContainer: "#1E3A78",
+  onPrimaryContainer: "#DCE2FF",
+  // Text
+  onSurface:     "#E3E2E6",
+  onSurfaceVar:  "#C4C6D0",
+  // Shape
+  radiusSm: 8,
+  radiusMd: 12,
+  radiusLg: 16,
+  radiusXl: 28,
+};
+
+// MD3 elevation via layered shadow (dp1–dp5). Applied as a style fragment.
+const elevation = (dp) => {
+  const shadows = {
+    0: "none",
+    1: "0 1px 2px rgba(0,0,0,0.30), 0 1px 3px 1px rgba(0,0,0,0.15)",
+    2: "0 1px 2px rgba(0,0,0,0.30), 0 2px 6px 2px rgba(0,0,0,0.15)",
+    3: "0 1px 3px rgba(0,0,0,0.30), 0 4px 8px 3px rgba(0,0,0,0.15)",
+    4: "0 2px 3px rgba(0,0,0,0.30), 0 6px 10px 4px rgba(0,0,0,0.15)",
+    5: "0 4px 4px rgba(0,0,0,0.30), 0 8px 12px 6px rgba(0,0,0,0.15)",
+  };
+  return shadows[dp] ?? shadows[1];
+};
+
+// State-layer overlay — MD3's signature interaction affordance. A hover or
+// press isn't a color swap, it's a translucent wash over the resting surface.
+const stateLayer = (baseColor, opacity) => {
+  // baseColor expected as hex; opacity 0.08 hover / 0.12 press per MD3 spec
+  return `${baseColor}${Math.round(opacity * 255).toString(16).padStart(2, "0")}`;
+};
+
+// ─── Type scale (MD3-derived: Display/Headline/Title/Body/Label) ─────────────
+const TYPE = {
+  titleLg:   { fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.3 },
+  titleMd:   { fontSize: 15, fontWeight: 600, letterSpacing: "0", lineHeight: 1.4 },
+  titleSm:   { fontSize: 13, fontWeight: 600, letterSpacing: "0.005em", lineHeight: 1.4 },
+  bodyLg:    { fontSize: 14, fontWeight: 400, letterSpacing: "0.01em", lineHeight: 1.6 },
+  bodyMd:    { fontSize: 13, fontWeight: 400, letterSpacing: "0.015em", lineHeight: 1.55 },
+  bodySm:    { fontSize: 12, fontWeight: 400, letterSpacing: "0.02em", lineHeight: 1.5 },
+  labelLg:   { fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", lineHeight: 1.3 },
+  labelMd:   { fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", lineHeight: 1.3 },
+  labelSm:   { fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", lineHeight: 1.3, textTransform: "uppercase" },
+};
 
 // ─── Severity ─────────────────────────────────────────────────────────────────
-const SC = { Critical:"#f87171", High:"#fb923c", Medium:"#fcd34d", Low:"#34d399", Info:"#60a5fa" };
+// MD3-desaturated tonal severity palette — sits in the surface system rather
+// than screaming against it. Each pairs a "tone" (for accents/text) with a
+// "container" (for filled badge backgrounds) per MD3 role-color convention.
+const SC = { Critical:"#FFB4AB", High:"#FFB77C", Medium:"#F5D67C", Low:"#8DD9A8", Info:"#A8C8FF" };
+const SC_CONTAINER = { Critical:"#5C1A15", High:"#5C3A15", Medium:"#4A3F10", Low:"#1B4A2C", Info:"#1E3A5F" };
 const SO = { Critical:0, High:1, Medium:2, Low:3 };
 
 function sev(f) { return SC[f.severity] || SC.Info; }
+function sevContainer(f) { return SC_CONTAINER[f.severity] || SC_CONTAINER.Info; }
+// Severity badge — resolves both tone + container from the finding/severity so
+// call sites don't need to know about SC_CONTAINER individually.
+const SeverityBadge = ({ severity, small }) => (
+  <Badge label={severity} color={SC[severity]||SC.Info} container={SC_CONTAINER[severity]||SC_CONTAINER.Info} small={small}/>
+);
 function focus(id) {
   if(id.startsWith("AZURE-CA-")||id.startsWith("AZURE-RISK-")) return "Conditional Access";
   if(id.startsWith("AZURE-MFA-")) return "MFA";
@@ -49,10 +142,10 @@ const REM = {
 };
 
 const EXS = {
-  fixed:          {l:"Fixed",          c:"#34d399", i:"✓"},
-  risk_accepted:  {l:"Risk Accepted",  c:"#fcd34d", i:"⚠"},
-  false_positive: {l:"False Positive", c:"#60a5fa", i:"⊘"},
-  in_progress:    {l:"In Progress",    c:"#fb923c", i:"◷"},
+  fixed:          {l:"Fixed",          c:SC.Low,     cc:SC_CONTAINER.Low,     i:"✓"},
+  risk_accepted:  {l:"Risk accepted",  c:SC.Medium,  cc:SC_CONTAINER.Medium,  i:"⚠"},
+  false_positive: {l:"False positive", c:SC.Info,    cc:SC_CONTAINER.Info,    i:"⊘"},
+  in_progress:    {l:"In progress",    c:SC.High,    cc:SC_CONTAINER.High,    i:"◷"},
 };
 
 const FW = {
@@ -79,24 +172,29 @@ const FW = {
 };
 
 // ─── Tiny components ──────────────────────────────────────────────────────────
-const Badge = ({label, color, small}) => (
-  <span style={{display:"inline-flex",alignItems:"center",padding:small?"1px 6px":"2px 9px",
-    borderRadius:3,fontSize:small?9:10,fontWeight:700,letterSpacing:"0.05em",
-    background:color+"18",color,border:`1px solid ${color}35`}}>{label}</span>
+// MD3 "tonal" badge — filled with the color's own dark container tone rather
+// than a translucent wash over the page background. Text uses the light tone
+// from the same role, so contrast holds regardless of what surface it sits on.
+const Badge = ({label, color, container, small}) => (
+  <span style={{display:"inline-flex",alignItems:"center",
+    padding:small?"2px 8px":"3px 10px",
+    borderRadius:999,...(small?TYPE.labelMd:TYPE.labelLg),
+    background:container||color+"26",color}}>{label}</span>
 );
 
-const ScoreBar = ({score, max=10}) => (
-  <div style={{display:"flex",alignItems:"center",gap:8}}>
-    <div style={{flex:1,height:4,background:"#2d3748",borderRadius:2}}>
-      <div style={{height:"100%",borderRadius:2,
-        background:score>7?"#f87171":score>4?"#fb923c":"#fcd34d",
-        width:`${(score/max)*100}%`,transition:"width 0.6s ease"}}/>
+const ScoreBar = ({score, max=10}) => {
+  const c = score>7?SC.Critical:score>4?SC.High:score>0?SC.Medium:SC.Low;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <div style={{flex:1,height:4,background:MD.surfaceHigh,borderRadius:2,overflow:"hidden"}}>
+        <div style={{height:"100%",borderRadius:2,background:c,
+          width:`${(score/max)*100}%`,transition:"width 0.5s cubic-bezier(0.2,0,0,1)"}}/>
+      </div>
+      <span style={{fontFamily:"'Roboto Mono',ui-monospace,monospace",fontSize:11,fontWeight:600,
+        color:c,minWidth:28,textAlign:"right"}}>{score.toFixed(1)}</span>
     </div>
-    <span style={{fontFamily:"monospace",fontSize:11,fontWeight:700,
-      color:score>7?"#f87171":score>4?"#fb923c":score>0?"#fcd34d":"#34d399",
-      minWidth:28,textAlign:"right"}}>{score.toFixed(1)}</span>
-  </div>
-);
+  );
+};
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAVS = [
@@ -142,6 +240,7 @@ function LoginPage({ onLogin, config }) {
   const [err, setErr]   = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [tab, setTab] = React.useState(config.msal_enabled ? "msal" : "local");
+  const [focusField, setFocusField] = React.useState(null);
 
   const localLogin = async () => {
     if (!user || !pass) { setErr("Enter username and password"); return; }
@@ -161,30 +260,39 @@ function LoginPage({ onLogin, config }) {
 
   const msalLogin = () => { window.location.href = MSAL_LOGIN_URL; };
 
+  const fieldStyle = (name) => ({
+    width:"100%",padding:"12px 14px",background:MD.surfaceDim,
+    border:`1px solid ${focusField===name?MD.primary:MD.outlineVar}`,
+    borderRadius:MD.radiusMd,color:MD.onSurface,
+    ...TYPE.bodyLg,outline:"none",boxSizing:"border-box",
+    transition:"border-color 0.15s",
+  });
+
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
-      background:"#111827",fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
-      <div style={{width:"100%",maxWidth:400}}>
+      background:MD.surfaceDim,fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
+      <div style={{width:"100%",maxWidth:420}}>
         {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:32}}>
-          <div style={{width:52,height:52,borderRadius:12,
-            background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+        <div style={{textAlign:"center",marginBottom:36}}>
+          <div style={{width:56,height:56,borderRadius:MD.radiusLg,
+            background:MD.primaryContainer,
             display:"flex",alignItems:"center",justifyContent:"center",
-            margin:"0 auto 16px",fontSize:22,fontWeight:800,color:"#fff"}}>EG</div>
-          <div style={{fontSize:24,fontWeight:800,color:"#e2e8f0"}}>EntraGuard</div>
-          <div style={{fontSize:12,color:"#475569",marginTop:4}}>Azure Identity Security Posture Management</div>
+            margin:"0 auto 18px",fontSize:22,fontWeight:700,color:MD.onPrimaryContainer,
+            boxShadow:elevation(2)}}>EG</div>
+          <div style={{...TYPE.titleLg,fontSize:26,color:MD.onSurface}}>EntraGuard</div>
+          <div style={{...TYPE.bodySm,color:MD.outline,marginTop:5}}>Azure identity security posture management</div>
         </div>
 
-        <div style={{background:"#1e293b",borderRadius:12,padding:28,border:"1px solid #2d3748"}}>
-          {/* Tab switcher */}
+        <div style={{background:MD.surfaceCont,borderRadius:MD.radiusXl,padding:30,boxShadow:elevation(3)}}>
+          {/* Tab switcher — MD3 segmented button */}
           {config.msal_enabled && config.local_admin_enabled && (
-            <div style={{display:"flex",background:"#111827",borderRadius:8,padding:4,marginBottom:24,gap:4}}>
-              {[["msal","Sign in with Microsoft"],["local","Local Admin"]].map(([t,l])=>(
+            <div style={{display:"flex",background:MD.surfaceDim,borderRadius:MD.radiusXl,padding:4,marginBottom:26,gap:4}}>
+              {[["msal","Sign in with Microsoft"],["local","Local admin"]].map(([t,l])=>(
                 <button key={t} onClick={()=>setTab(t)} style={{
-                  flex:1,padding:"7px 12px",borderRadius:6,border:"none",cursor:"pointer",
-                  background:tab===t?"#1e293b":"transparent",
-                  color:tab===t?"#e2e8f0":"#475569",
-                  fontSize:12,fontWeight:tab===t?600:400,transition:"all 0.15s"
+                  flex:1,padding:"8px 12px",borderRadius:MD.radiusXl,border:"none",cursor:"pointer",
+                  background:tab===t?MD.surfaceHigh:"transparent",
+                  color:tab===t?MD.onSurface:MD.outline,
+                  ...TYPE.labelLg,fontWeight:tab===t?700:500,transition:"all 0.15s"
                 }}>{l}</button>
               ))}
             </div>
@@ -194,10 +302,10 @@ function LoginPage({ onLogin, config }) {
           {(tab === "msal" || (!config.local_admin_enabled && config.msal_enabled)) && (
             <div>
               <button onClick={msalLogin} style={{
-                width:"100%",padding:"12px 16px",borderRadius:8,border:"none",cursor:"pointer",
-                background:"#0ea5e9",color:"#fff",fontSize:14,fontWeight:600,
-                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-                transition:"background 0.2s",
+                width:"100%",padding:"13px 18px",borderRadius:MD.radiusXl,border:"none",cursor:"pointer",
+                background:MD.primaryDim,color:MD.surfaceDim,...TYPE.bodyLg,fontWeight:700,
+                display:"flex",alignItems:"center",justifyContent:"center",gap:11,
+                boxShadow:elevation(1),transition:"background 0.2s",
               }}>
                 <svg width="18" height="18" viewBox="0 0 21 21" fill="currentColor">
                   <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
@@ -207,56 +315,55 @@ function LoginPage({ onLogin, config }) {
                 </svg>
                 Sign in with Microsoft
               </button>
-              <div style={{marginTop:8,padding:"8px 12px",background:"rgba(251,191,36,0.08)",
-                border:"1px solid rgba(251,191,36,0.2)",borderRadius:6,fontSize:11,color:"#fbbf24"}}>
-                ⚠ Requires HTTPS. Add <code style={{fontFamily:"monospace",fontSize:10}}>
-                {window.location.origin}/api/v1/auth/callback</code> as a redirect URI in 
-                Azure Portal → App Registration → Authentication, and set up HTTPS for your app.
+              <div style={{marginTop:10,padding:"10px 14px",background:SC_CONTAINER.Medium,
+                borderRadius:MD.radiusMd,...TYPE.bodySm,color:SC.Medium,lineHeight:1.6}}>
+                Requires HTTPS. Add <code style={{fontFamily:"'Roboto Mono',ui-monospace,monospace",fontSize:10.5}}>
+                {window.location.origin}/api/v1/auth/callback</code> as a redirect URI in
+                Azure Portal → App registration → Authentication, and set up HTTPS for your app.
               </div>
             </div>
           )}
 
-          {/* Local admin form */}
+          {/* Local admin form — MD3 outlined text fields */}
           {tab === "local" && config.local_admin_enabled && (
-            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
               <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>USERNAME</div>
+                <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:7}}>Username</div>
                 <input value={user} onChange={e=>setUser(e.target.value)}
+                  onFocus={()=>setFocusField("user")} onBlur={()=>setFocusField(null)}
                   onKeyDown={e=>e.key==="Enter"&&localLogin()}
                   placeholder="admin"
-                  style={{width:"100%",padding:"10px 12px",background:"#111827",
-                    border:"1px solid #2d3748",borderRadius:8,color:"#e2e8f0",
-                    fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+                  style={fieldStyle("user")}/>
               </div>
               <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>PASSWORD</div>
+                <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:7}}>Password</div>
                 <input type="password" value={pass} onChange={e=>setPass(e.target.value)}
+                  onFocus={()=>setFocusField("pass")} onBlur={()=>setFocusField(null)}
                   onKeyDown={e=>e.key==="Enter"&&localLogin()}
                   placeholder="••••••••"
-                  style={{width:"100%",padding:"10px 12px",background:"#111827",
-                    border:"1px solid #2d3748",borderRadius:8,color:"#e2e8f0",
-                    fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+                  style={fieldStyle("pass")}/>
               </div>
-              {err && <div style={{fontSize:12,color:"#f87171",padding:"8px 12px",
-                background:"rgba(248,113,113,0.1)",borderRadius:6,border:"1px solid rgba(248,113,113,0.2)"}}>{err}</div>}
+              {err && <div style={{...TYPE.bodySm,color:SC.Critical,padding:"10px 14px",
+                background:SC_CONTAINER.Critical,borderRadius:MD.radiusMd}}>{err}</div>}
               <button onClick={localLogin} disabled={loading}
-                style={{padding:"11px 16px",borderRadius:8,border:"none",cursor:"pointer",
-                  background:loading?"#334155":"linear-gradient(135deg,#0ea5e9,#6366f1)",
-                  color:"#fff",fontSize:14,fontWeight:600,marginTop:4,transition:"all 0.2s"}}>
-                {loading?"Signing in…":"Sign In"}
+                style={{padding:"13px 18px",borderRadius:MD.radiusXl,border:"none",cursor:"pointer",
+                  background:loading?MD.surfaceHigh:MD.primaryDim,
+                  color:loading?MD.outline:MD.surfaceDim,...TYPE.bodyLg,fontWeight:700,marginTop:6,
+                  boxShadow:loading?"none":elevation(1),transition:"all 0.2s"}}>
+                {loading?"Signing in…":"Sign in"}
               </button>
             </div>
           )}
 
           {!config.msal_enabled && !config.local_admin_enabled && (
-            <div style={{textAlign:"center",color:"#64748b",fontSize:13}}>
+            <div style={{textAlign:"center",color:MD.outline,...TYPE.bodyMd,lineHeight:1.7}}>
               Authentication is enabled but no login method is configured.<br/>
               Set LOCAL_ADMIN_PASSWORD or configure AZURE credentials in .env.
             </div>
           )}
         </div>
 
-        <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"#334155"}}>
+        <div style={{textAlign:"center",marginTop:18,...TYPE.labelMd,color:MD.outlineVar}}>
           EntraGuard v2.0 · Read-only · Your data stays on your server
         </div>
       </div>
@@ -264,66 +371,79 @@ function LoginPage({ onLogin, config }) {
   );
 }
 
-
 function Nav({view, setView, fails, user, onLogout}) {
+  const [hoverId, setHoverId] = React.useState(null);
   return (
-    <aside style={{position:"fixed",top:0,left:0,bottom:0,width:216,
-      background:"#1a2332",borderRight:"1px solid #2d3748",
+    <aside style={{position:"fixed",top:0,left:0,bottom:0,width:232,
+      background:MD.surfaceLow,borderRight:`1px solid ${MD.outlineVar}`,
       display:"flex",flexDirection:"column",zIndex:100,
-      fontFamily:"'JetBrains Mono','Fira Code','Consolas',monospace"}}>
+      fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* Logo */}
-      <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #2d3748"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:8,
-            background:"linear-gradient(135deg,#38bdf8,#818cf8)",
+      <div style={{padding:"20px 20px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:38,height:38,borderRadius:MD.radiusMd,
+            background:MD.primaryContainer,
             display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <svg width="20" height="20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+            <svg width="20" height="20" fill="none" stroke={MD.onPrimaryContainer} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
             </svg>
           </div>
           <div>
-            <div style={{fontWeight:700,color:"#d1d9e6",fontSize:14,letterSpacing:"0.02em"}}>EntraGuard</div>
-            <div style={{fontSize:9,color:"#4a5568",letterSpacing:"0.08em",marginTop:1}}>AZURE CSPM · v2.0</div>
+            <div style={{...TYPE.titleSm,color:MD.onSurface}}>EntraGuard</div>
+            <div style={{...TYPE.labelSm,color:MD.outline,marginTop:1}}>Azure CSPM · v2.0</div>
           </div>
         </div>
       </div>
-      {/* Nav */}
-      <nav style={{flex:1,padding:"10px 10px",overflowY:"auto"}}>
-        {NAVS.map(n=>(
-          <button key={n.id} onClick={()=>setView(n.id)} style={{
-            width:"100%",display:"flex",alignItems:"center",gap:10,
-            padding:"9px 10px",marginBottom:2,borderRadius:6,
-            background:view===n.id?"#0f2744":"transparent",
-            border:`1px solid ${view===n.id?"#2d5986":"transparent"}`,
-            color:view===n.id?"#38bdf8":"#5a6a7e",
-            fontSize:11,fontWeight:view===n.id?700:400,
-            cursor:"pointer",transition:"all 0.12s",textAlign:"left"}}>
-            <span style={{fontSize:13,opacity:0.9}}>{n.icon}</span>
-            {n.l}
-            {n.id==="findings"&&fails>0&&(
-              <span style={{marginLeft:"auto",background:"#f87171",color:"#fff",
-                fontSize:9,padding:"1px 5px",borderRadius:9,fontWeight:700}}>{fails}</span>
-            )}
-          </button>
-        ))}
+
+      {/* Nav — MD3 navigation-rail pattern: pill active-indicator behind
+          icon+label, state-layer wash on hover, no borders */}
+      <nav style={{flex:1,padding:"4px 12px",overflowY:"auto"}}>
+        {NAVS.map(n=>{
+          const active = view===n.id;
+          const hovered = hoverId===n.id;
+          return (
+            <button key={n.id} onClick={()=>setView(n.id)}
+              onMouseEnter={()=>setHoverId(n.id)} onMouseLeave={()=>setHoverId(null)}
+              style={{
+                width:"100%",display:"flex",alignItems:"center",gap:12,
+                padding:"10px 14px",marginBottom:4,borderRadius:MD.radiusXl,
+                background: active ? MD.primaryContainer : hovered ? stateLayer(MD.onSurface, 0.06) : "transparent",
+                border:"none",
+                color: active ? MD.onPrimaryContainer : MD.onSurfaceVar,
+                ...TYPE.labelLg, fontWeight: active?700:500, letterSpacing:"0.01em",
+                cursor:"pointer",transition:"background 0.15s cubic-bezier(0.2,0,0,1)",textAlign:"left"}}>
+              <span style={{fontSize:15,opacity:active?1:0.85,width:18,textAlign:"center"}}>{n.icon}</span>
+              <span style={{flex:1}}>{n.l}</span>
+              {n.id==="findings"&&fails>0&&(
+                <span style={{background:SC_CONTAINER.Critical,color:SC.Critical,
+                  ...TYPE.labelMd,padding:"1px 7px",borderRadius:999}}>{fails}</span>
+              )}
+            </button>
+          );
+        })}
       </nav>
+
       {/* Footer */}
-      <div style={{padding:"12px 16px",borderTop:"1px solid #2d3748"}}>
+      <div style={{padding:"16px 20px",borderTop:`1px solid ${MD.outlineVar}`}}>
         {user && user.auth_type !== "disabled" ? (<>
-          <div style={{fontSize:9,color:"#374458",fontWeight:600,fontFamily:"monospace",marginBottom:4}}>SIGNED IN AS</div>
-          <div style={{fontSize:12,color:"#d1d9e6",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name||"User"}</div>
-          {user.email&&<div style={{fontSize:9,color:"#374458",marginTop:1,overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>}
-          <div style={{fontSize:9,color:"#374458",marginTop:2,fontFamily:"monospace"}}>{user.auth_type==="msal"?"Microsoft SSO":"Local Admin"}</div>
-          <button onClick={onLogout} style={{marginTop:8,width:"100%",padding:"5px",
-            background:"transparent",border:"1px solid #2d3748",borderRadius:5,
-            color:"#5a6a7e",fontSize:10,cursor:"pointer"}}>Sign out</button>
+          <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:6}}>Signed in as</div>
+          <div style={{...TYPE.bodyMd,color:MD.onSurface,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name||"User"}</div>
+          {user.email&&<div style={{...TYPE.bodySm,color:MD.outline,marginTop:1,overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>}
+          <div style={{...TYPE.labelSm,color:MD.outline,marginTop:4}}>{user.auth_type==="msal"?"Microsoft SSO":"Local admin"}</div>
+          <button onClick={onLogout} style={{marginTop:12,width:"100%",padding:"8px",
+            background:"transparent",border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusSm,
+            color:MD.onSurfaceVar,...TYPE.labelLg,fontWeight:600,cursor:"pointer",
+            transition:"background 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=stateLayer(MD.onSurface,0.06)}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>Sign out</button>
         </>) : (<>
-          <div style={{fontSize:9,color:"#374458",marginBottom:3,fontFamily:"monospace"}}>OPERATOR</div>
-          <div style={{fontSize:11,color:"#8896aa"}}>Junaid Ahmed</div>
-          <div style={{fontSize:9,color:"#374458"}}>iam@jahmed.cloud</div>
-          <div style={{display:"flex",gap:8,marginTop:8}}>
+          <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:5}}>Operator</div>
+          <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:600}}>Junaid Ahmed</div>
+          <div style={{...TYPE.bodySm,color:MD.outline}}>iam@jahmed.cloud</div>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
             {[["GH","https://github.com/jahmed-cloud/entra-guard"],["DH","https://hub.docker.com/r/jahmed22/entra-guard"]].map(([l,u])=>(
-              <a key={l} href={u} target="_blank" style={{fontSize:9,color:"#374458",textDecoration:"none",padding:"2px 5px",border:"1px solid #2d3748",borderRadius:3}}>{l}</a>
+              <a key={l} href={u} target="_blank" style={{...TYPE.labelMd,color:MD.outline,
+                textDecoration:"none",padding:"3px 8px",border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusSm}}>{l}</a>
             ))}
           </div>
         </>)}
@@ -333,44 +453,51 @@ function Nav({view, setView, fails, user, onLogout}) {
 }
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
+// ─── Topbar ───────────────────────────────────────────────────────────────────
 function Top({target, scanning, onScan, online, lastScan, crits}) {
+  const [hover, setHover] = React.useState(false);
   return (
-    <header style={{position:"fixed",top:0,left:216,right:0,height:52,
-      background:"#1a2332",borderBottom:"1px solid #2d3748",
-      display:"flex",alignItems:"center",padding:"0 22px",gap:14,zIndex:90,
-      fontFamily:"'JetBrains Mono','Fira Code','Consolas',monospace"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-        <span style={{width:7,height:7,borderRadius:"50%",
-          background:online?"#34d399":"#f87171",
-          boxShadow:`0 0 8px ${online?"#34d399":"#f87171"}`,flexShrink:0}}/>
-        <span style={{fontSize:10,color:"#4a5568"}}>{online?"ONLINE":"OFFLINE"}</span>
+    <header className="eg-top-header" style={{position:"fixed",top:0,left:232,right:0,height:64,
+      background:MD.surfaceLow,borderBottom:`1px solid ${MD.outlineVar}`,
+      display:"flex",alignItems:"center",padding:"0 24px",gap:16,zIndex:90,
+      fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+        <span style={{width:8,height:8,borderRadius:"50%",
+          background:online?SC.Low:SC.Critical,
+          boxShadow:`0 0 0 3px ${online?SC.Low:SC.Critical}22`,flexShrink:0}}/>
+        <span style={{...TYPE.labelMd,color:MD.outline}}>{online?"Online":"Offline"}</span>
         {target&&<>
-          <span style={{color:"#2d3748",fontSize:14}}>/</span>
-          <span style={{fontSize:11,color:"#8896aa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{target.name}</span>
+          <span style={{color:MD.outlineVar,fontSize:15}}>/</span>
+          <span style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{target.name}</span>
         </>}
-        {lastScan&&<span style={{fontSize:9,color:"#374458",marginLeft:4,flexShrink:0}}>
-          LAST {new Date(lastScan).toLocaleString()}
+        {lastScan&&<span style={{...TYPE.labelMd,color:MD.outline,marginLeft:6,flexShrink:0,fontWeight:500}}>
+          Last scan {new Date(lastScan).toLocaleString()}
         </span>}
       </div>
+
       {crits>0&&(
-        <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",
-          background:"#f8717115",border:"1px solid #f8717140",borderRadius:4}}>
-          <span style={{width:5,height:5,borderRadius:"50%",background:"#f87171",
-            animation:"blink 1.2s ease infinite"}}/>
-          <span style={{fontSize:9,color:"#f87171",fontWeight:700,letterSpacing:"0.06em"}}>{crits} CRITICAL</span>
+        <div style={{display:"flex",alignItems:"center",gap:7,padding:"6px 14px",
+          background:SC_CONTAINER.Critical,borderRadius:MD.radiusXl,boxShadow:elevation(1)}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:SC.Critical,
+            animation:"blink 1.4s ease infinite"}}/>
+          <span style={{...TYPE.labelLg,color:SC.Critical}}>{crits} critical</span>
         </div>
       )}
+
+      {/* MD3 filled button — solid tonal fill, state-layer on hover, no gradient */}
       <button onClick={onScan} disabled={scanning}
-        style={{padding:"7px 16px",borderRadius:4,border:"none",cursor:"pointer",
-          background:scanning?"transparent":"linear-gradient(135deg,#38bdf8,#818cf8)",
-          color:scanning?"#38bdf8":"#fff",
-          outline:scanning?"1px solid #38bdf8":"none",
-          fontSize:10,fontWeight:700,letterSpacing:"0.08em",
-          display:"flex",alignItems:"center",gap:7,transition:"all 0.2s"}}>
+        onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+        style={{padding:"10px 22px",borderRadius:MD.radiusXl,border:"none",cursor:scanning?"default":"pointer",
+          background:scanning?MD.surfaceHigh:(hover?MD.primary:MD.primaryDim),
+          color:scanning?MD.outline:MD.surfaceDim,
+          boxShadow:scanning?"none":elevation(hover?2:1),
+          ...TYPE.labelLg,letterSpacing:"0.03em",
+          display:"flex",alignItems:"center",gap:8,
+          transition:"background 0.15s cubic-bezier(0.2,0,0,1), box-shadow 0.15s"}}>
         {scanning
-          ?<><div style={{width:10,height:10,border:"2px solid #38bdf8",borderTopColor:"transparent",
-              borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>SCANNING</>
-          :"▶ SCAN"}
+          ?<><div style={{width:14,height:14,border:`2px solid ${MD.outline}`,borderTopColor:"transparent",
+              borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>Scanning…</>
+          :<>▶ Run scan</>}
       </button>
     </header>
   );
@@ -386,11 +513,12 @@ function Dashboard({findings, runs}) {
   fail.forEach(f=>{if(bySev[f.severity]!==undefined)bySev[f.severity]++;});
   const byDomain={};
   fail.forEach(f=>{const d=focus(f.check_id);byDomain[d]=(byDomain[d]||0)+1;});
+  const aiExplainedCount=findings.filter(f=>f.ai_explanation).length;
+  const aiFlaggedCount=findings.filter(f=>f.ai_false_positive_likelihood&&f.ai_false_positive_likelihood!=="none").length;
   const top5=[...fail].sort((a,b)=>b.score-a.score).slice(0,5);
   const trendData=runs.slice(0,12).reverse();
 
-  // SVG Line Chart helpers
-  const W=480,H=80,PAD=8;
+  const W=480,H=88,PAD=8;
   const vals=trendData.map(r=>r.checks_failed||0);
   const maxV=Math.max(...vals,1);
   const pts=vals.map((v,i)=>{
@@ -401,7 +529,6 @@ function Dashboard({findings, runs}) {
   const linePath=pts.map((p,i)=>i===0?`M${p[0]},${p[1]}`:`L${p[0]},${p[1]}`).join(" ");
   const areaPath=pts.length>0?`${linePath} L${pts[pts.length-1][0]},${H-PAD} L${pts[0][0]},${H-PAD} Z`:"";
 
-  // Pass rate trend
   const passVals=trendData.map(r=>r.checks_total>0?Math.round((r.checks_passed||0)/r.checks_total*100):0);
   const maxP=100;
   const passPts=passVals.map((v,i)=>{
@@ -415,22 +542,28 @@ function Dashboard({findings, runs}) {
   const domainEntries=Object.entries(byDomain).sort((a,b)=>b[1]-a[1]);
   const maxDomain=Math.max(...domainEntries.map(e=>e[1]),1);
 
-  const CARD={background:"#1e293b",border:"1px solid #2d3748",borderRadius:10,padding:16};
+  // MD3 elevated surface card — one shared shape/elevation, dp1 resting state
+  const CARD={background:MD.surfaceCont,borderRadius:MD.radiusLg,padding:18,boxShadow:elevation(1)};
+  const scoreColor = score===null?MD.outline:score>=80?SC.Low:score>=60?SC.Medium:SC.Critical;
+  // Category palette drawn from the shared MD3 ramp set, not ad-hoc hex —
+  // used for domain bars where more than one hue is needed to distinguish rows
+  const CAT = [SC.Critical, SC.High, SC.Medium, SC.Low, MD.primary, "#C9A6FF"];
 
   return (
-    <div style={{animation:"fadeIn 0.25s ease"}}>
-      {/* Critical Banner */}
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)"}}>
+      {/* Critical banner — elevated above the rest of the page (dp2) since it
+          demands the most immediate attention: elevation as priority signal */}
       {bySev.Critical>0&&(
-        <div style={{marginBottom:16,padding:"12px 16px",borderRadius:8,
-          background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.25)",
-          display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:36,height:36,borderRadius:8,background:"rgba(248,113,113,0.12)",
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>⚠</div>
+        <div style={{marginBottom:16,padding:"14px 18px",borderRadius:MD.radiusLg,
+          background:SC_CONTAINER.Critical,boxShadow:elevation(2),
+          display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:38,height:38,borderRadius:MD.radiusMd,background:"rgba(0,0,0,0.18)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,color:SC.Critical}}>⚠</div>
           <div>
-            <div style={{fontWeight:700,color:"#f87171",fontSize:13}}>
+            <div style={{...TYPE.titleSm,color:SC.Critical}}>
               {bySev.Critical} critical issue{bySev.Critical!==1?"s":""} require immediate action
             </div>
-            <div style={{fontSize:11,color:"#5a6a7e",marginTop:2}}>
+            <div style={{...TYPE.bodySm,color:"#E8B4AE",marginTop:3}}>
               {bySev.High} high · {bySev.Medium} medium · {bySev.Low} low severity findings detected.
               Open Findings for step-by-step remediation guides.
             </div>
@@ -438,89 +571,118 @@ function Dashboard({findings, runs}) {
         </div>
       )}
 
-      {/* Row 1: Score + KPIs */}
-      <div style={{display:"grid",gridTemplateColumns:"130px 1fr",gap:10,marginBottom:10}}>
-        {/* Score ring */}
-        <div style={{...CARD,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
-          <div style={{fontSize:9,color:"#5a6a7e",letterSpacing:"0.1em",fontFamily:"monospace"}}>POSTURE</div>
-          <div style={{position:"relative",width:80,height:80}}>
-            <svg width="80" height="80" viewBox="0 0 80 80" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="40" cy="40" r="32" fill="none" stroke="#2d3748" strokeWidth="8"/>
-              {score!==null&&<circle cx="40" cy="40" r="32" fill="none"
-                stroke={score>=80?"#34d399":score>=60?"#fcd34d":"#f87171"}
-                strokeWidth="8" strokeLinecap="round"
-                strokeDasharray={`${2*Math.PI*32*score/100} ${2*Math.PI*32}`}
-                style={{transition:"stroke-dasharray 1.2s ease"}}/>}
+      {/* AI scan summary — prominent, unmistakably AI-labeled card. Sits
+          below the deterministic critical banner (never replacing it), but
+          is now visually substantial enough that a first-time user notices
+          the feature is active, not just a small aside easy to miss. */}
+      {runs[0]?.ai_summary&&(
+        <div style={{marginBottom:16,borderRadius:MD.radiusLg,overflow:"hidden",
+          background:`linear-gradient(135deg, ${MD.primaryContainer}45, ${MD.primaryContainer}15)`,
+          border:`1px solid ${MD.primary}30`,boxShadow:elevation(2)}}>
+          <div style={{padding:"16px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:MD.primaryContainer,
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>✨</div>
+              <div style={{...TYPE.labelLg,color:MD.primary,fontWeight:700,letterSpacing:"0.02em"}}>
+                AI SCAN SUMMARY
+              </div>
+              <span style={{...TYPE.labelSm,color:MD.onPrimaryContainer,background:MD.primaryContainer,
+                padding:"2px 8px",borderRadius:MD.radiusXl,fontWeight:600}}>
+                AI-generated
+              </span>
+              <div style={{flex:1}}/>
+              {aiExplainedCount>0&&(
+                <span style={{...TYPE.labelSm,color:MD.outline}}>
+                  {aiExplainedCount} finding{aiExplainedCount!==1?"s":""} AI-reviewed
+                  {aiFlaggedCount>0&&<> · <span style={{color:SC.Medium,fontWeight:600}}>{aiFlaggedCount} flagged as possible false positive{aiFlaggedCount!==1?"s":""}</span></>}
+                </span>
+              )}
+            </div>
+            <p style={{...TYPE.bodyLg,color:MD.onSurface,lineHeight:1.75,margin:0}}>
+              {runs[0].ai_summary}
+            </p>
+          </div>
+          <div style={{padding:"8px 20px",background:MD.surfaceDim+"40",borderTop:`1px solid ${MD.primary}20`}}>
+            <span style={{...TYPE.labelSm,color:MD.outlineVar}}>
+              Generated from this scan's aggregate results — see individual findings below for per-check AI reasoning and false-positive flags.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Row 1 — Score + KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"150px 1fr",gap:12,marginBottom:12}} className="eg-chart-row">
+        <div style={{...CARD,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}>
+          <div style={{...TYPE.labelSm,color:MD.outline}}>Posture</div>
+          <div style={{position:"relative",width:88,height:88}}>
+            <svg width="88" height="88" viewBox="0 0 88 88" style={{transform:"rotate(-90deg)"}}>
+              <circle cx="44" cy="44" r="36" fill="none" stroke={MD.surfaceHigh} strokeWidth="9"/>
+              {score!==null&&<circle cx="44" cy="44" r="36" fill="none"
+                stroke={scoreColor} strokeWidth="9" strokeLinecap="round"
+                strokeDasharray={`${2*Math.PI*36*score/100} ${2*Math.PI*36}`}
+                style={{transition:"stroke-dasharray 1.2s cubic-bezier(0.2,0,0,1)"}}/>}
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <div style={{fontSize:score===null?14:22,fontWeight:800,lineHeight:1,
-                color:score===null?"#374458":score>=80?"#34d399":score>=60?"#fcd34d":"#f87171"}}>
+              <div style={{fontSize:score===null?15:26,fontWeight:700,lineHeight:1,color:scoreColor}}>
                 {score===null?"—":score}
               </div>
-              {score!==null&&<div style={{fontSize:8,color:"#5a6a7e",marginTop:1}}>/100</div>}
+              {score!==null&&<div style={{...TYPE.labelMd,color:MD.outline,marginTop:2}}>/100</div>}
             </div>
           </div>
-          <div style={{fontSize:9,color:score===null?"#374458":score>=80?"#34d399":score>=60?"#fcd34d":"#f87171",
-            fontFamily:"monospace",textAlign:"center",letterSpacing:"0.06em"}}>
-            {score===null?"NO DATA":score>=80?"GOOD":score>=60?"MODERATE":"AT RISK"}
+          <div style={{...TYPE.labelMd,color:scoreColor,textAlign:"center"}}>
+            {score===null?"No data":score>=80?"Good":score>=60?"Moderate":"At risk"}
           </div>
         </div>
 
-        {/* KPI grid */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}} className="eg-kpi-grid">
           {[
-            {l:"Checks",v:findings.length,c:"#8896aa"},
-            {l:"Failing",v:fail.length,c:fail.length>0?"#f87171":"#34d399",s:`${findings.length?Math.round(fail.length/findings.length*100):0}%`},
-            {l:"Critical",v:bySev.Critical,c:bySev.Critical>0?"#f87171":"#374458"},
-            {l:"High",v:bySev.High,c:bySev.High>0?"#fb923c":"#374458"},
-            {l:"Passing",v:pass.length,c:"#34d399"},
-            {l:"Errors",v:err.length,c:err.length>0?"#fb923c":"#374458",s:"fix perms"},
+            {l:"Checks",v:findings.length,c:MD.onSurfaceVar},
+            {l:"Failing",v:fail.length,c:fail.length>0?SC.Critical:SC.Low,s:`${findings.length?Math.round(fail.length/findings.length*100):0}%`},
+            {l:"Critical",v:bySev.Critical,c:bySev.Critical>0?SC.Critical:MD.outlineVar},
+            {l:"High",v:bySev.High,c:bySev.High>0?SC.High:MD.outlineVar},
+            {l:"Passing",v:pass.length,c:SC.Low},
+            {l:"Errors",v:err.length,c:err.length>0?SC.High:MD.outlineVar,s:"fix perms"},
           ].map(k=>(
-            <div key={k.l} style={{background:"#1e293b",border:"1px solid #2d3748",borderRadius:8,padding:"11px 12px"}}>
-              <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.08em",marginBottom:5,fontFamily:"monospace"}}>{k.l.toUpperCase()}</div>
-              <div style={{fontSize:26,fontWeight:800,color:k.c,lineHeight:1}}>{k.v}</div>
-              {k.s&&<div style={{fontSize:9,color:"#4a5568",marginTop:3,fontFamily:"monospace"}}>{k.s}</div>}
+            <div key={k.l} style={{background:MD.surfaceCont,borderRadius:MD.radiusMd,padding:"14px 14px",boxShadow:elevation(1)}}>
+              <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:6}}>{k.l}</div>
+              <div style={{fontSize:28,fontWeight:700,color:k.c,lineHeight:1}}>{k.v}</div>
+              {k.s&&<div style={{...TYPE.labelMd,color:MD.outline,marginTop:5}}>{k.s}</div>}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Row 2: Severity bars + Domain bars */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        {/* Severity */}
+      {/* Row 2 — Severity + Domain */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}} className="eg-sev-domain">
         <div style={{...CARD}}>
-          <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",marginBottom:14,fontFamily:"monospace"}}>FINDINGS BY SEVERITY</div>
+          <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:16}}>Findings by severity</div>
           {Object.entries(bySev).map(([s,n])=>(
-            <div key={s} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-              <span style={{fontSize:10,padding:"2px 7px",borderRadius:4,
-                background:SC[s]+"18",color:SC[s],
-                border:`1px solid ${SC[s]}35`,fontWeight:700,minWidth:60,textAlign:"center"}}>{s}</span>
-              <div style={{flex:1,height:6,background:"#111827",borderRadius:3,overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:3,background:SC[s],
+            <div key={s} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <Badge label={s} color={SC[s]} container={SC_CONTAINER[s]} small/>
+              <div style={{flex:1,height:8,background:MD.surfaceDim,borderRadius:4,overflow:"hidden"}}>
+                <div style={{height:"100%",borderRadius:4,background:SC[s],
                   width:fail.length?`${Math.max(2,(n/fail.length)*100)}%`:"0%",
-                  transition:"width 0.9s ease"}}/>
+                  transition:"width 0.9s cubic-bezier(0.2,0,0,1)"}}/>
               </div>
-              <span style={{fontSize:12,fontWeight:700,color:SC[s],minWidth:24,textAlign:"right",fontFamily:"monospace"}}>{n}</span>
+              <span style={{fontSize:13,fontWeight:700,color:SC[s],minWidth:22,textAlign:"right"}}>{n}</span>
             </div>
           ))}
         </div>
 
-        {/* Domain horizontal bars */}
         <div style={{...CARD}}>
-          <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",marginBottom:14,fontFamily:"monospace"}}>FAILURES BY DOMAIN</div>
+          <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:16}}>Failures by domain</div>
           {domainEntries.length===0
-            ?<div style={{color:"#34d399",fontSize:12,textAlign:"center",paddingTop:20}}>✓ All clear</div>
+            ?<div style={{color:SC.Low,...TYPE.bodyMd,textAlign:"center",paddingTop:24}}>All clear</div>
             :domainEntries.slice(0,6).map(([d,n],i)=>{
               const pct=Math.max(3,(n/maxDomain)*100);
-              const colors=["#f87171","#fb923c","#fcd34d","#34d399","#38bdf8","#818cf8"];
-              const c=colors[i%colors.length];
+              const c=CAT[i%CAT.length];
               return (
-                <div key={d} style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
-                  <div style={{fontSize:9,color:"#8896aa",minWidth:110,flexShrink:0,fontFamily:"monospace"}}>{d.toUpperCase().slice(0,12)}</div>
-                  <div style={{flex:1,height:6,background:"#111827",borderRadius:3,overflow:"hidden"}}>
-                    <div style={{height:"100%",borderRadius:3,background:c,width:`${pct}%`,transition:"width 0.9s ease"}}/>
+                <div key={d} style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}>
+                  <div style={{...TYPE.bodySm,color:MD.onSurfaceVar,minWidth:118,flexShrink:0}}>{d}</div>
+                  <div style={{flex:1,height:8,background:MD.surfaceDim,borderRadius:4,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:4,background:c,width:`${pct}%`,transition:"width 0.9s cubic-bezier(0.2,0,0,1)"}}/>
                   </div>
-                  <span style={{fontSize:11,fontWeight:700,color:c,minWidth:20,textAlign:"right",fontFamily:"monospace"}}>{n}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:c,minWidth:20,textAlign:"right"}}>{n}</span>
                 </div>
               );
             })
@@ -528,135 +690,120 @@ function Dashboard({findings, runs}) {
         </div>
       </div>
 
-      {/* Row 3: Dual Line Charts */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        {/* Failing trend line chart */}
+      {/* Row 3 — Trend charts */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}} className="eg-chart-row">
         <div style={{...CARD}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",fontFamily:"monospace"}}>FAILING CHECKS — TREND</div>
-            {trendData.length>0&&<span style={{fontSize:9,color:"#f87171",fontFamily:"monospace"}}>
-              {trendData[trendData.length-1]?.checks_failed||vals[vals.length-1]||0} CURRENT
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{...TYPE.labelSm,color:MD.outline}}>Failing checks — trend</div>
+            {trendData.length>0&&<span style={{...TYPE.labelMd,color:SC.Critical}}>
+              {trendData[trendData.length-1]?.checks_failed||vals[vals.length-1]||0} current
             </span>}
           </div>
           <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{display:"block"}}>
             <defs>
               <linearGradient id="failGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f87171" stopOpacity="0.25"/>
-                <stop offset="100%" stopColor="#f87171" stopOpacity="0.02"/>
+                <stop offset="0%" stopColor={SC.Critical} stopOpacity="0.28"/>
+                <stop offset="100%" stopColor={SC.Critical} stopOpacity="0.02"/>
               </linearGradient>
             </defs>
-            {/* Grid lines */}
             {[0.25,0.5,0.75].map(p=>(
               <line key={p} x1={PAD} y1={H-PAD-(p*(H-PAD*2))} x2={W-PAD} y2={H-PAD-(p*(H-PAD*2))}
-                stroke="#2d3748" strokeWidth="0.5" strokeDasharray="3,3"/>
+                stroke={MD.outlineVar} strokeWidth="0.5" strokeDasharray="3,3"/>
             ))}
-            {/* Area fill */}
             {areaPath&&<path d={areaPath} fill="url(#failGrad)"/>}
-            {/* Line */}
-            {linePath&&<path d={linePath} fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
-            {/* Data points */}
+            {linePath&&<path d={linePath} fill="none" stroke={SC.Critical} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>}
             {pts.map((p,i)=>(
-              <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#f87171" stroke="#1e293b" strokeWidth="1.5"/>
+              <circle key={i} cx={p[0]} cy={p[1]} r="3.5" fill={SC.Critical} stroke={MD.surfaceCont} strokeWidth="2"/>
             ))}
-            {/* X labels */}
             {trendData.map((_,i)=>(
               <text key={i} x={pts[i]?.[0]||0} y={H-1} textAnchor="middle"
-                fontSize="7" fill="#374458" fontFamily="monospace">#{i+1}</text>
+                fontSize="8" fill={MD.outlineVar}>{i+1}</text>
             ))}
           </svg>
         </div>
 
-        {/* Pass rate trend */}
         <div style={{...CARD}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",fontFamily:"monospace"}}>PASS RATE — TREND</div>
-            {passVals.length>0&&<span style={{fontSize:9,color:"#34d399",fontFamily:"monospace"}}>
-              {passVals[passVals.length-1]}% CURRENT
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{...TYPE.labelSm,color:MD.outline}}>Pass rate — trend</div>
+            {passVals.length>0&&<span style={{...TYPE.labelMd,color:SC.Low}}>
+              {passVals[passVals.length-1]}% current
             </span>}
           </div>
           <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{display:"block"}}>
             <defs>
               <linearGradient id="passGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#34d399" stopOpacity="0.2"/>
-                <stop offset="100%" stopColor="#34d399" stopOpacity="0.02"/>
+                <stop offset="0%" stopColor={SC.Low} stopOpacity="0.24"/>
+                <stop offset="100%" stopColor={SC.Low} stopOpacity="0.02"/>
               </linearGradient>
             </defs>
             {[0.25,0.5,0.75].map(p=>(
               <line key={p} x1={PAD} y1={H-PAD-(p*(H-PAD*2))} x2={W-PAD} y2={H-PAD-(p*(H-PAD*2))}
-                stroke="#2d3748" strokeWidth="0.5" strokeDasharray="3,3"/>
+                stroke={MD.outlineVar} strokeWidth="0.5" strokeDasharray="3,3"/>
             ))}
             {passArea&&<path d={passArea} fill="url(#passGrad)"/>}
-            {passPath&&<path d={passPath} fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
+            {passPath&&<path d={passPath} fill="none" stroke={SC.Low} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>}
             {passPts.map((p,i)=>(
-              <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#34d399" stroke="#1e293b" strokeWidth="1.5"/>
+              <circle key={i} cx={p[0]} cy={p[1]} r="3.5" fill={SC.Low} stroke={MD.surfaceCont} strokeWidth="2"/>
             ))}
             {trendData.map((_,i)=>(
               <text key={i} x={passPts[i]?.[0]||0} y={H-1} textAnchor="middle"
-                fontSize="7" fill="#374458" fontFamily="monospace">#{i+1}</text>
+                fontSize="8" fill={MD.outlineVar}>{i+1}</text>
             ))}
           </svg>
         </div>
       </div>
 
-      {/* Row 4: Top findings + Compliance ring grid */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginBottom:10}}>
-        {/* Top findings */}
+      {/* Row 4 — Top findings + Coverage rings */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,marginBottom:12}} className="eg-top5-grid">
         {top5.length>0&&(
           <div style={{...CARD}}>
-            <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",marginBottom:14,fontFamily:"monospace"}}>TOP 5 — HIGHEST RISK SCORE</div>
+            <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:16}}>Top 5 — highest risk score</div>
             {top5.map((f,i)=>{
               const r=REM[f.check_id];const sc=sev(f);
               return (
-                <div key={f.check_id} style={{display:"grid",gridTemplateColumns:"20px 3px 1fr auto 72px",
-                  alignItems:"center",gap:10,padding:"8px 0",
-                  borderBottom:i<4?"1px solid #2d3748":"none"}}>
-                  <div style={{width:20,height:20,borderRadius:4,background:"#2d3748",
+                <div key={f.check_id} style={{display:"grid",gridTemplateColumns:"22px 3px 1fr auto 76px",
+                  alignItems:"center",gap:12,padding:"10px 0",
+                  borderBottom:i<4?`1px solid ${MD.outlineVar}`:"none"}}>
+                  <div style={{width:22,height:22,borderRadius:MD.radiusSm,background:MD.surfaceHigh,
                     display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:9,fontWeight:700,color:"#5a6a7e",fontFamily:"monospace"}}>{i+1}</div>
-                  <div style={{height:28,background:sc,borderRadius:2}}/>
+                    fontSize:10,fontWeight:700,color:MD.outline}}>{i+1}</div>
+                  <div style={{height:30,background:sc,borderRadius:2}}/>
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:9,color:"#4a5568",fontFamily:"monospace"}}>{f.check_id}</div>
-                    <div style={{fontSize:12,fontWeight:500,color:"#c0cad8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r?.title||f.check_id}</div>
+                    <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:1}}>{f.check_id}</div>
+                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r?.title||f.check_id}</div>
                   </div>
-                  <span style={{fontSize:9,padding:"2px 7px",borderRadius:4,
-                    background:sc+"18",color:sc,border:`1px solid ${sc}35`,fontWeight:700,flexShrink:0}}>{f.severity}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{flex:1,height:4,background:"#111827",borderRadius:2}}>
-                      <div style={{height:"100%",borderRadius:2,background:sc,width:`${(f.score/10)*100}%`}}/>
-                    </div>
-                    <span style={{fontSize:11,fontWeight:700,color:sc,minWidth:24,textAlign:"right",fontFamily:"monospace"}}>{f.score.toFixed(1)}</span>
-                  </div>
+                  <Badge label={f.severity} color={sc} container={sevContainer(f)} small/>
+                  <ScoreBar score={f.score}/>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Mini compliance rings */}
-        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,minWidth:160}}>
-          <div style={{fontSize:9,color:"#4a5568",fontWeight:600,letterSpacing:"0.1em",fontFamily:"monospace"}}>COVERAGE</div>
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:14,minWidth:172}}>
+          <div style={{...TYPE.labelSm,color:MD.outline}}>Coverage</div>
           {[
-            {l:"CA Policies",total:15,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-CA-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
+            {l:"CA policies",total:15,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-CA-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
             {l:"MFA",total:9,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-MFA-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
             {l:"Identity",total:12,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-IDENTITY-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
             {l:"Apps",total:12,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-APP-")||f.check_id.startsWith("AZURE-CONSENT-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
           ].map(({l,total,pass})=>{
             const pct=total>0?Math.round((pass/total)*100):0;
-            const c=pct>=80?"#34d399":pct>=60?"#fcd34d":"#f87171";
-            const r=20,circ=2*Math.PI*r;
+            const c=pct>=80?SC.Low:pct>=60?SC.Medium:SC.Critical;
+            const r=21,circ=2*Math.PI*r;
             return (
-              <div key={l} style={{display:"flex",alignItems:"center",gap:10}}>
-                <svg width="44" height="44" viewBox="0 0 44 44">
-                  <circle cx="22" cy="22" r={r} fill="none" stroke="#2d3748" strokeWidth="4"/>
-                  <circle cx="22" cy="22" r={r} fill="none" stroke={c} strokeWidth="4"
+              <div key={l} style={{display:"flex",alignItems:"center",gap:12}}>
+                <svg width="48" height="48" viewBox="0 0 48 48">
+                  <circle cx="24" cy="24" r={r} fill="none" stroke={MD.surfaceHigh} strokeWidth="4.5"/>
+                  <circle cx="24" cy="24" r={r} fill="none" stroke={c} strokeWidth="4.5"
                     strokeLinecap="round" strokeDasharray={`${circ*pct/100} ${circ}`}
-                    transform="rotate(-90 22 22)"
-                    style={{transition:"stroke-dasharray 0.8s ease"}}/>
-                  <text x="22" y="26" textAnchor="middle" fontSize="9" fontWeight="700" fill={c} fontFamily="monospace">{pct}%</text>
+                    transform="rotate(-90 24 24)"
+                    style={{transition:"stroke-dasharray 0.8s cubic-bezier(0.2,0,0,1)"}}/>
+                  <text x="24" y="28" textAnchor="middle" fontSize="10" fontWeight="700" fill={c}>{pct}%</text>
                 </svg>
                 <div>
-                  <div style={{fontSize:11,color:"#8896aa",fontWeight:500}}>{l}</div>
-                  <div style={{fontSize:9,color:"#374458",fontFamily:"monospace"}}>{pass}/{total} pass</div>
+                  <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:600}}>{l}</div>
+                  <div style={{...TYPE.labelMd,color:MD.outline,marginTop:1}}>{pass}/{total} pass</div>
                 </div>
               </div>
             );
@@ -682,6 +829,9 @@ function Findings({findings}) {
   const pages=Math.ceil(list.length/PAGE);
   const shown=list.slice((page-1)*PAGE,page*PAGE);
 
+  const STATUS_COLOR = { passed: SC.Low, failed: SC.Critical, error: SC.High };
+  const STATUS_CONTAINER = { passed: SC_CONTAINER.Low, failed: SC_CONTAINER.Critical, error: SC_CONTAINER.High };
+
   const csv=()=>{
     const h=["Check ID","Title","Severity","Score","Status","Risk","Steps","Effort"];
     const rows=list.map(f=>{const r=REM[f.check_id];return[f.check_id,r?.title||"",f.severity,f.score,f.status,r?.risk||f.risk_description||"",r?.steps?.join(" | ")||f.remediation_steps||"",f.estimated_effort||""];});
@@ -690,119 +840,224 @@ function Findings({findings}) {
   };
 
   return (
-    <div style={{animation:"fadeIn 0.25s ease"}}>
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)"}}>
       {/* Toolbar */}
-      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+      <div className="eg-findings-toolbar" style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
         <input value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}
           placeholder="Search check ID or title…"
-          style={{padding:"6px 11px",background:"#1e293b",border:"1px solid #2d3748",
-            color:"#8896aa",borderRadius:5,fontSize:11,width:240,fontFamily:"inherit"}}/>
-        {["All","Critical","High","Medium","Low"].map(s=>(
-          <button key={s} onClick={()=>{setSf(s);setPage(1);}}
-            style={{padding:"5px 11px",borderRadius:4,fontSize:10,fontWeight:600,
-              background:sf===s?(SC[s]||"#38bdf8")+"18":"#1e293b",
-              border:`1px solid ${sf===s?(SC[s]||"#38bdf8")+"60":"#2d3748"}`,
-              color:sf===s?(SC[s]||"#38bdf8"):"#4a5568",cursor:"pointer"}}>{s}</button>
-        ))}
+          style={{padding:"9px 14px",background:MD.surfaceHigh,border:`1px solid ${MD.outlineVar}`,
+            color:MD.onSurface,borderRadius:MD.radiusXl,...TYPE.bodyMd,width:260,fontFamily:"inherit"}}/>
+        {/* MD3 filter chips — outlined resting state, filled tonal when active */}
+        {["All","Critical","High","Medium","Low"].map(s=>{
+          const active = sf===s;
+          const c = SC[s]||MD.primary;
+          const cc = SC_CONTAINER[s]||MD.primaryContainer;
+          return (
+            <button key={s} onClick={()=>{setSf(s);setPage(1);}}
+              style={{padding:"7px 14px",borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:600,
+                background:active?cc:"transparent",
+                border:`1px solid ${active?cc:MD.outlineVar}`,
+                color:active?c:MD.onSurfaceVar,cursor:"pointer",transition:"all 0.15s"}}>{s}</button>
+          );
+        })}
         <select value={st} onChange={e=>{setSt(e.target.value);setPage(1);}}
-          style={{padding:"5px 10px",background:"#1e293b",border:"1px solid #2d3748",
-            color:"#5a6a7e",borderRadius:5,fontSize:10,fontFamily:"inherit"}}>
+          style={{padding:"8px 12px",background:MD.surfaceHigh,border:`1px solid ${MD.outlineVar}`,
+            color:MD.onSurfaceVar,borderRadius:MD.radiusMd,...TYPE.labelLg,fontFamily:"inherit"}}>
           {["failed","All","passed","error"].map(s=><option key={s}>{s}</option>)}
         </select>
         <div style={{flex:1}}/>
-        <span style={{fontSize:9,color:"#374458",fontFamily:"monospace"}}>{shown.length}/{list.length}</span>
-        <button onClick={csv} style={{padding:"5px 12px",background:"#1e293b",
-          border:"1px solid #2d3748",color:"#4a5568",borderRadius:4,fontSize:10,cursor:"pointer"}}>↓ CSV</button>
+        <span style={{...TYPE.labelMd,color:MD.outline}}>{shown.length}/{list.length}</span>
+        <button onClick={csv} style={{padding:"8px 16px",background:MD.surfaceHigh,
+          border:`1px solid ${MD.outlineVar}`,color:MD.onSurfaceVar,borderRadius:MD.radiusXl,
+          ...TYPE.labelLg,fontWeight:600,cursor:"pointer"}}>↓ CSV</button>
       </div>
 
       {/* List */}
-      <div style={{display:"flex",flexDirection:"column",gap:2}}>
-        {shown.length===0&&<div style={{textAlign:"center",padding:48,color:"#374458",fontSize:12,fontFamily:"monospace"}}>NO FINDINGS MATCH FILTER</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {shown.length===0&&<div style={{textAlign:"center",padding:56,color:MD.outline,...TYPE.bodyMd}}>No findings match filter</div>}
         {shown.map(f=>{
           const r=REM[f.check_id];const isO=open===f.check_id;const isFx=fixed.has(f.check_id);
           const sc=sev(f);
+          const stColor=STATUS_COLOR[f.status]||MD.outline;
+          const stContainer=STATUS_CONTAINER[f.status]||MD.surfaceHigh;
           return (
-            <div key={f.check_id} style={{border:`1px solid ${isO?"#2d5986":"#2d3748"}`,
-              background:"#1e293b",borderRadius:6,overflow:"hidden"}}>
+            <div key={f.check_id} style={{borderRadius:MD.radiusMd,overflow:"hidden",
+              background:MD.surfaceCont,boxShadow:elevation(isO?2:1),
+              transition:"box-shadow 0.15s cubic-bezier(0.2,0,0,1)"}}>
               <div onClick={()=>setOpen(isO?null:f.check_id)}
-                style={{display:"grid",gridTemplateColumns:"4px 140px 1fr auto auto auto auto",
-                  alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer"}}>
-                <div style={{height:"100%",minHeight:28,background:sc,borderRadius:2}}/>
-                <span style={{fontFamily:"monospace",fontSize:9,color:"#4a5568",overflow:"hidden",textOverflow:"ellipsis"}}>{f.check_id}</span>
-                <span style={{fontSize:12,color:isFx?"#374458":"#c0cad8",fontWeight:500,
+                style={{display:"grid",gridTemplateColumns:"4px 168px 1fr auto auto auto auto",
+                  alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer"}}>
+                <div style={{height:"100%",minHeight:30,background:sc,borderRadius:2}}/>
+                <span style={{...TYPE.labelMd,color:MD.outline,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.check_id}</span>
+                <span style={{...TYPE.bodyMd,color:isFx?MD.outlineVar:MD.onSurface,fontWeight:500,
                   overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
-                  textDecoration:isFx?"line-through":"none"}}>{r?.title||f.check_id}</span>
-                <Badge label={f.severity} color={sc} small/>
-                <span style={{fontSize:9,padding:"2px 7px",borderRadius:3,fontWeight:700,
-                  background:f.status==="passed"?"#34d39920":f.status==="failed"?"#f8717118":"#fb923c18",
-                  color:f.status==="passed"?"#34d399":f.status==="failed"?"#f87171":"#fb923c",
-                  border:`1px solid ${f.status==="passed"?"#34d39940":f.status==="failed"?"#f8717130":"#fb923c30"}`}}>
-                  {f.status==="passed"?"✓ "+f.status:f.status}
+                  textDecoration:isFx?"line-through":"none"}}>
+                  {r?.title||f.check_id}
+                  {f.ai_false_positive_likelihood&&f.ai_false_positive_likelihood!=="none"&&(
+                    <span title={`AI flagged this as a ${f.ai_false_positive_likelihood} false positive`}
+                      style={{marginLeft:8,fontSize:11,color:SC.Medium}}>⚠ AI flag</span>
+                  )}
                 </span>
-                <div style={{width:70}}><ScoreBar score={f.score}/></div>
-                <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                <Badge label={f.severity} color={sc} container={sevContainer(f)} small/>
+                <Badge label={f.status==="passed"?"✓ "+f.status:f.status} color={stColor} container={stContainer} small/>
+                <div style={{width:76}}><ScoreBar score={f.score}/></div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
                   <button onClick={e=>{e.stopPropagation();tog(f.check_id);}}
-                    style={{padding:"2px 8px",background:"transparent",
-                      border:`1px solid ${isFx?"#34d39950":"#2d3748"}`,
-                      color:isFx?"#34d399":"#374458",borderRadius:3,fontSize:9,cursor:"pointer",
-                      fontFamily:"monospace"}}>{isFx?"✓ FIXED":"MARK FIXED"}</button>
-                  <span style={{color:"#374458",fontSize:10}}>{isO?"▲":"▼"}</span>
+                    style={{padding:"4px 10px",background:isFx?SC_CONTAINER.Low:"transparent",
+                      border:`1px solid ${isFx?SC_CONTAINER.Low:MD.outlineVar}`,
+                      color:isFx?SC.Low:MD.outline,borderRadius:MD.radiusSm,...TYPE.labelMd,cursor:"pointer"}}>
+                    {isFx?"✓ Fixed":"Mark fixed"}
+                  </button>
+                  <span style={{color:MD.outline,fontSize:11,transform:isO?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▼</span>
                 </div>
               </div>
 
               {isO&&(
-                <div style={{borderTop:"1px solid #2d3748",padding:"16px 16px 16px 26px",
-                  background:"#111827"}}>
+                <div style={{borderTop:`1px solid ${MD.outlineVar}`,padding:"18px 18px 18px 30px",
+                  background:MD.surfaceDim}}>
                   {r?(
                     <>
-                      <div style={{marginBottom:14}}>
-                        <div style={{fontSize:9,color:"#f59e0b",fontWeight:700,letterSpacing:"0.1em",
-                          fontFamily:"monospace",marginBottom:8}}>WHY THIS MATTERS</div>
-                        <p style={{fontSize:12,color:"#8896aa",lineHeight:1.8,margin:0}}>{r.risk}</p>
+                      <div style={{marginBottom:16}}>
+                        <div style={{...TYPE.labelSm,color:SC.Medium,marginBottom:8}}>Why this matters</div>
+                        <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.8,margin:0}}>{r.risk}</p>
                       </div>
                       <div style={{marginBottom:14}}>
-                        <div style={{fontSize:9,color:"#34d399",fontWeight:700,letterSpacing:"0.1em",
-                          fontFamily:"monospace",marginBottom:10}}>HOW TO FIX — STEP BY STEP</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <div style={{...TYPE.labelSm,color:SC.Low,marginBottom:10}}>How to fix — step by step</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:9}}>
                           {r.steps.map((s,i)=>(
-                            <div key={i} style={{display:"flex",gap:10}}>
-                              <div style={{width:20,height:20,borderRadius:"50%",
-                                background:"#38bdf820",border:"1px solid #38bdf840",
+                            <div key={i} style={{display:"flex",gap:11}}>
+                              <div style={{width:22,height:22,borderRadius:"50%",
+                                background:MD.primaryContainer,
                                 display:"flex",alignItems:"center",justifyContent:"center",
-                                fontSize:9,fontWeight:700,color:"#38bdf8",flexShrink:0,fontFamily:"monospace"}}>{i+1}</div>
-                              <p style={{fontSize:12,color:"#8896aa",lineHeight:1.7,margin:0,paddingTop:1}}>{s}</p>
+                                fontSize:10,fontWeight:700,color:MD.onPrimaryContainer,flexShrink:0}}>{i+1}</div>
+                              <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.7,margin:0,paddingTop:2}}>{s}</p>
                             </div>
                           ))}
                         </div>
                         {r.ref&&<a href={r.ref} target="_blank"
-                          style={{display:"inline-flex",alignItems:"center",gap:4,
-                            marginTop:12,fontSize:10,color:"#38bdf8",textDecoration:"none",
-                            padding:"3px 10px",border:"1px solid #1e4a7a",borderRadius:4}}>
-                          ↗ Microsoft Documentation
+                          style={{display:"inline-flex",alignItems:"center",gap:5,
+                            marginTop:14,...TYPE.labelLg,color:MD.primary,textDecoration:"none",
+                            padding:"6px 14px",border:`1px solid ${MD.primaryContainer}`,borderRadius:MD.radiusXl}}>
+                          ↗ Microsoft documentation
                         </a>}
                       </div>
                     </>
                   ):(
                     <>
-                      {f.risk_description&&<div style={{marginBottom:12}}>
-                        <div style={{fontSize:9,color:"#f59e0b",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>RISK</div>
-                        <p style={{fontSize:12,color:"#8896aa",lineHeight:1.7,margin:0}}>{f.risk_description}</p>
+                      {f.risk_description&&<div style={{marginBottom:14}}>
+                        <div style={{...TYPE.labelSm,color:SC.Medium,marginBottom:8}}>Risk</div>
+                        <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.7,margin:0}}>{f.risk_description}</p>
                       </div>}
-                      {f.remediation_steps&&<div style={{marginBottom:12}}>
-                        <div style={{fontSize:9,color:"#34d399",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>REMEDIATION</div>
-                        <p style={{fontSize:12,color:"#8896aa",lineHeight:1.7,margin:0}}>{f.remediation_steps}</p>
+                      {f.remediation_steps&&<div style={{marginBottom:14}}>
+                        <div style={{...TYPE.labelSm,color:SC.Low,marginBottom:8}}>Remediation</div>
+                        <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.7,margin:0}}>{f.remediation_steps}</p>
                       </div>}
+
                     </>
                   )}
+                  {(f.ai_explanation||f.ai_false_positive_likelihood)&&(() => {
+                    const fp = f.ai_false_positive_likelihood;
+                    const flagged = fp && fp !== "none";
+                    // Confidence in the DETERMINISTIC verdict, inverted from
+                    // the AI's false-positive likelihood: "likely FP" means
+                    // low confidence the failed verdict is real.
+                    const conf = fp === "likely" ? 25 : fp === "possible" ? 60 : 92;
+                    const confColor = conf >= 80 ? SC.Low : conf >= 50 ? SC.Medium : SC.Critical;
+                    const queries = (() => {
+                      try { return f.ai_queries_made ? JSON.parse(f.ai_queries_made) : []; }
+                      catch { return []; }
+                    })();
+                    const R=26, C=2*Math.PI*R;
+                    return (
+                      <div style={{marginBottom:14,borderRadius:MD.radiusLg,overflow:"hidden",
+                        background:`linear-gradient(135deg, ${MD.primaryContainer}40, ${MD.primaryContainer}12)`,
+                        border:`1px solid ${flagged?SC.Medium+"55":MD.primary+"30"}`}}>
+
+                        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",
+                          borderBottom:`1px solid ${MD.primary}20`}}>
+                          <span style={{fontSize:15}}>✨</span>
+                          <span style={{...TYPE.labelLg,color:MD.primary,fontWeight:700,letterSpacing:"0.03em"}}>
+                            AI ANALYSIS
+                          </span>
+                          {queries.length>0&&(
+                            <span style={{...TYPE.labelSm,color:MD.onPrimaryContainer,
+                              background:MD.primaryContainer,padding:"2px 8px",borderRadius:MD.radiusXl}}>
+                              🔎 AGENT — {queries.length} live check{queries.length!==1?"s":""}
+                            </span>
+                          )}
+                          <div style={{flex:1}}/>
+                          <span style={{...TYPE.labelSm,color:MD.outlineVar}}>advisory only</span>
+                        </div>
+
+                        <div style={{display:"flex",gap:16,padding:"14px 16px",alignItems:"flex-start"}}>
+                          {/* Confidence gauge — infographic, not decoration:
+                              encodes how much the AI trusts the deterministic
+                              verdict, at a glance, before reading any text. */}
+                          <div style={{flexShrink:0,textAlign:"center",width:76}}>
+                            <svg width="68" height="68" viewBox="0 0 68 68">
+                              <circle cx="34" cy="34" r={R} fill="none" stroke={MD.surfaceHigh} strokeWidth="6"/>
+                              <circle cx="34" cy="34" r={R} fill="none" stroke={confColor} strokeWidth="6"
+                                strokeLinecap="round" strokeDasharray={`${C*conf/100} ${C}`}
+                                transform="rotate(-90 34 34)"
+                                style={{transition:"stroke-dasharray 0.9s cubic-bezier(0.2,0,0,1)"}}/>
+                              <text x="34" y="31" textAnchor="middle" fontSize="15" fontWeight="700" fill={confColor}>{conf}%</text>
+                              <text x="34" y="43" textAnchor="middle" fontSize="7" fill={MD.outline}>CONFIDENCE</text>
+                            </svg>
+                            <div style={{...TYPE.labelSm,color:confColor,marginTop:2}}>
+                              {conf>=80?"Verdict solid":conf>=50?"Verify this":"Likely wrong"}
+                            </div>
+                          </div>
+
+                          <div style={{flex:1,minWidth:0}}>
+                            {f.ai_explanation&&(
+                              <p style={{...TYPE.bodyMd,color:MD.onSurface,lineHeight:1.7,margin:"0 0 10px"}}>
+                                {f.ai_explanation}
+                              </p>
+                            )}
+
+                            {flagged&&(
+                              <div style={{padding:"10px 12px",borderRadius:MD.radiusMd,
+                                background:SC_CONTAINER.Medium+"55",borderLeft:`3px solid ${SC.Medium}`}}>
+                                <div style={{...TYPE.labelSm,color:SC.Medium,marginBottom:5}}>
+                                  ⚠ RECOMMENDED ACTION — {fp==="likely"?"likely":"possible"} false positive
+                                </div>
+                                <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.65,margin:0}}>
+                                  {f.ai_false_positive_reason || "Flagged as uncertain, but no specific reason was given."}
+                                </p>
+                                <p style={{...TYPE.labelMd,color:MD.outline,margin:"8px 0 0"}}>
+                                  Verify manually before treating as resolved — the stored verdict is unchanged.
+                                </p>
+                              </div>
+                            )}
+
+                            {queries.length>0&&(
+                              <div style={{marginTop:10}}>
+                                <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:5}}>
+                                  Live tenant lookups performed
+                                </div>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                                  {queries.map((q,i)=>(
+                                    <code key={i} style={{...TYPE.labelMd,color:MD.onPrimaryContainer,
+                                      background:MD.primaryContainer+"70",padding:"3px 8px",
+                                      borderRadius:MD.radiusSm,fontFamily:"'Roboto Mono',monospace"}}>{q}</code>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {f.affected_resources?.length>0&&(
                     <div>
-                      <div style={{fontSize:9,color:"#4a5568",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>
-                        AFFECTED [{f.affected_resources.length}]
+                      <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:8}}>
+                        Affected [{f.affected_resources.length}]
                       </div>
-                      <div style={{background:"#1a2332",border:"1px solid #2d3748",borderRadius:4,
-                        padding:"8px 10px",maxHeight:100,overflowY:"auto"}}>
+                      <div style={{background:MD.surfaceCont,borderRadius:MD.radiusSm,
+                        padding:"10px 12px",maxHeight:110,overflowY:"auto"}}>
                         {f.affected_resources.slice(0,8).map((r,i)=>(
-                          <div key={i} style={{fontFamily:"monospace",fontSize:10,color:"#5a6a7e",marginBottom:2}}>
+                          <div key={i} style={{...TYPE.bodySm,color:MD.outline,marginBottom:3,fontFamily:"'Roboto Mono',ui-monospace,monospace"}}>
                             {typeof r==="string"?r:Object.entries(r).map(([k,v])=>`${k}: ${v}`).join("  ·  ")}
                           </div>
                         ))}
@@ -810,9 +1065,9 @@ function Findings({findings}) {
                     </div>
                   )}
                   {f.evidence&&Object.keys(f.evidence).filter(k=>k!=="error").length>0&&(
-                    <div style={{marginTop:10}}>
-                      <div style={{fontSize:9,color:"#374458",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:4}}>EVIDENCE</div>
-                      <div style={{fontFamily:"monospace",fontSize:9,color:"#374458",lineHeight:1.6}}>
+                    <div style={{marginTop:12}}>
+                      <div style={{...TYPE.labelSm,color:MD.outlineVar,marginBottom:6}}>Evidence</div>
+                      <div style={{fontFamily:"'Roboto Mono',ui-monospace,monospace",fontSize:10.5,color:MD.outlineVar,lineHeight:1.6}}>
                         {JSON.stringify(f.evidence,null,2).split("\n").slice(0,5).join("\n")}
                       </div>
                     </div>
@@ -824,12 +1079,13 @@ function Findings({findings}) {
         })}
       </div>
       {pages>1&&(
-        <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:12}}>
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:16}}>
           {Array.from({length:pages},(_,i)=>(
             <button key={i} onClick={()=>setPage(i+1)}
-              style={{padding:"4px 9px",borderRadius:3,fontSize:10,
-                background:page===i+1?"#38bdf8":"#1e293b",
-                border:"1px solid #2d3748",color:page===i+1?"#fff":"#4a5568",cursor:"pointer"}}>{i+1}</button>
+              style={{padding:"6px 12px",borderRadius:MD.radiusXl,...TYPE.labelLg,
+                background:page===i+1?MD.primaryContainer:"transparent",
+                border:`1px solid ${page===i+1?MD.primaryContainer:MD.outlineVar}`,
+                color:page===i+1?MD.onPrimaryContainer:MD.outline,cursor:"pointer"}}>{i+1}</button>
           ))}
         </div>
       )}
@@ -837,42 +1093,48 @@ function Findings({findings}) {
   );
 }
 
-// ─── Compliance ───────────────────────────────────────────────────────────────
 function Compliance({findings}) {
   const [fw,setFw]=useState("NIST CSF");
   const sm=Object.fromEntries(findings.map(f=>[f.check_id,f.status]));
   return (
-    <div style={{animation:"fadeIn 0.25s ease"}}>
-      <div style={{display:"flex",gap:6,marginBottom:16}}>
-        {Object.keys(FW).map(f=>(
-          <button key={f} onClick={()=>setFw(f)}
-            style={{padding:"6px 14px",borderRadius:4,fontSize:10,fontWeight:600,
-              background:fw===f?"#38bdf818":"#1e293b",
-              border:`1px solid ${fw===f?"#38bdf860":"#2d3748"}`,
-              color:fw===f?"#38bdf8":"#4a5568",cursor:"pointer",fontFamily:"monospace"}}>{f}
-          </button>
-        ))}
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)"}}>
+      <div className="eg-compliance-tabs" style={{display:"flex",gap:8,marginBottom:18}}>
+        {Object.keys(FW).map(f=>{
+          const active = fw===f;
+          return (
+            <button key={f} onClick={()=>setFw(f)}
+              style={{padding:"8px 16px",borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:600,
+                background:active?MD.primaryContainer:"transparent",
+                border:`1px solid ${active?MD.primaryContainer:MD.outlineVar}`,
+                color:active?MD.onPrimaryContainer:MD.outline,cursor:"pointer",transition:"all 0.15s"}}>{f}
+            </button>
+          );
+        })}
       </div>
       {Object.entries(FW[fw]).map(([domain,ids])=>{
         const tot=ids.length;
         const pas=ids.filter(id=>sm[id]==="passed").length;
         const pct=tot?Math.round((pas/tot)*100):0;
-        const c=pct>=80?"#34d399":pct>=60?"#fcd34d":"#f87171";
+        const c=pct>=80?SC.Low:pct>=60?SC.Medium:SC.Critical;
         return (
-          <div key={domain} style={{background:"#1e293b",border:"1px solid #2d3748",
-            borderRadius:8,padding:16,marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-              <div style={{flex:1,fontSize:12,fontWeight:600,color:"#c0cad8"}}>{domain}</div>
-              <span style={{fontSize:10,color:"#4a5568",fontFamily:"monospace"}}>{pas}/{tot} controls</span>
-              <span style={{fontSize:14,fontWeight:800,color:c,fontFamily:"monospace"}}>{pct}%</span>
+          <div key={domain} style={{background:MD.surfaceCont,boxShadow:elevation(1),
+            borderRadius:MD.radiusLg,padding:18,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:10}}>
+              <div style={{flex:1,...TYPE.titleSm,color:MD.onSurface}}>{domain}</div>
+              <span style={{...TYPE.labelMd,color:MD.outline}}>{pas}/{tot} controls</span>
+              <span style={{fontSize:16,fontWeight:700,color:c}}>{pct}%</span>
             </div>
-            <div style={{height:4,background:"#2d3748",borderRadius:2,marginBottom:10}}>
-              <div style={{height:"100%",borderRadius:2,background:c,width:`${pct}%`,transition:"width 0.8s"}}/>
+            <div style={{height:6,background:MD.surfaceDim,borderRadius:3,marginBottom:12,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:3,background:c,width:`${pct}%`,
+                transition:"width 0.8s cubic-bezier(0.2,0,0,1)"}}/>
             </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-              {ids.map(id=>{const s=sm[id];const co=s==="passed"?"#34d399":s==="failed"?"#f87171":"#374458";
-                return <span key={id} style={{fontFamily:"monospace",fontSize:8,
-                  padding:"2px 5px",borderRadius:3,background:`${co}12`,color:co,border:`1px solid ${co}25`}}>{id}</span>;
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {ids.map(id=>{
+                const s=sm[id];
+                const co=s==="passed"?SC.Low:s==="failed"?SC.Critical:MD.outlineVar;
+                const cco=s==="passed"?SC_CONTAINER.Low:s==="failed"?SC_CONTAINER.Critical:MD.surfaceHigh;
+                return <span key={id} style={{fontFamily:"'Roboto Mono',ui-monospace,monospace",fontSize:9.5,
+                  padding:"3px 8px",borderRadius:MD.radiusSm,background:cco,color:co,fontWeight:600}}>{id}</span>;
               })}
             </div>
           </div>
@@ -882,16 +1144,16 @@ function Compliance({findings}) {
   );
 }
 
-// ─── Remediation ──────────────────────────────────────────────────────────────
 function Remediation({findings}) {
   const fail = findings.filter(f=>f.status==="failed");
   const [expanded, setExpanded] = React.useState(null);
   const [effortFilter, setEffortFilter] = React.useState("All");
+  const [hoverKey, setHoverKey] = React.useState(null);
 
   const groups = {
-    Low:      {label:"Quick Wins",    color:"#34d399", icon:"⚡", desc:"< 1 hour"},
-    Moderate: {label:"This Week",     color:"#fbbf24", icon:"📅", desc:"1–7 days"},
-    High:     {label:"Project Work",  color:"#f87171", icon:"🏗",  desc:"Multi-week"},
+    Low:      {label:"Quick wins",   color:SC.Low,    icon:"⚡", desc:"Under 1 hour"},
+    Moderate: {label:"This week",    color:SC.Medium, icon:"📅", desc:"1–7 days"},
+    High:     {label:"Project work", color:SC.Critical,icon:"🏗", desc:"Multi-week"},
   };
 
   fail.forEach(f => {
@@ -902,48 +1164,52 @@ function Remediation({findings}) {
     g.items = (g.items||[]).sort((a,b)=>b.score-a.score);
   });
 
-  const shown = effortFilter==="All" ? fail.sort((a,b)=>b.score-a.score)
+  const shown = effortFilter==="All" ? [...fail].sort((a,b)=>b.score-a.score)
     : (groups[effortFilter]?.items||[]);
 
   if (fail.length === 0) return (
-    <div style={{textAlign:"center",padding:80,animation:"fadeIn 0.3s ease"}}>
-      <div style={{fontSize:48,marginBottom:16}}>🎉</div>
-      <div style={{fontSize:18,fontWeight:700,color:"#34d399"}}>All checks passing</div>
+    <div style={{textAlign:"center",padding:96,animation:"fadeIn 0.3s cubic-bezier(0.2,0,0,1)"}}>
+      <div style={{fontSize:48,marginBottom:18}}>🎉</div>
+      <div style={{...TYPE.titleMd,color:SC.Low}}>All checks passing</div>
     </div>
   );
 
   return (
-    <div style={{animation:"fadeIn 0.3s ease"}}>
-      {/* Summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}} className="eg-chart-row">
+    <div style={{animation:"fadeIn 0.3s cubic-bezier(0.2,0,0,1)"}}>
+      {/* Summary cards — MD3 elevation lifts on hover, a real interaction
+          affordance rather than a static border swap */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}} className="eg-chart-row">
         {Object.entries(groups).map(([key,g])=>{
           const count = g.items?.length||0;
           const pct = fail.length ? Math.round((count/fail.length)*100) : 0;
-          const r=16, circ=2*Math.PI*r;
+          const r=17, circ=2*Math.PI*r;
+          const active = effortFilter===key;
+          const hovered = hoverKey===key;
           return (
             <button key={key}
-              onClick={()=>setEffortFilter(effortFilter===key?"All":key)}
-              style={{background:effortFilter===key?g.color+"15":"#1e293b",
-                border:`1px solid ${effortFilter===key?g.color:"#2d3748"}`,
-                borderRadius:8,padding:"14px 16px",cursor:"pointer",textAlign:"left",
-                transition:"all 0.15s"}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              onClick={()=>setEffortFilter(active?"All":key)}
+              onMouseEnter={()=>setHoverKey(key)} onMouseLeave={()=>setHoverKey(null)}
+              style={{background:active?g.color+"14":MD.surfaceCont,
+                border:`1px solid ${active?g.color:"transparent"}`,
+                boxShadow:elevation(hovered||active?2:1),
+                borderRadius:MD.radiusLg,padding:"16px 18px",cursor:"pointer",textAlign:"left",
+                transition:"box-shadow 0.15s cubic-bezier(0.2,0,0,1), background 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
                 <span style={{fontSize:20}}>{g.icon}</span>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:700,color:effortFilter===key?g.color:"#d1d9e6"}}>{g.label}</div>
-                  <div style={{fontSize:10,color:"#4a5568"}}>{g.desc}</div>
+                  <div style={{...TYPE.titleSm,color:active?g.color:MD.onSurface}}>{g.label}</div>
+                  <div style={{...TYPE.labelMd,color:MD.outline,marginTop:1}}>{g.desc}</div>
                 </div>
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r={r} fill="none" stroke="#2d3748" strokeWidth="4"/>
-                  <circle cx="20" cy="20" r={r} fill="none" stroke={g.color} strokeWidth="4"
+                <svg width="42" height="42" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r={r} fill="none" stroke={MD.surfaceHigh} strokeWidth="4"/>
+                  <circle cx="21" cy="21" r={r} fill="none" stroke={g.color} strokeWidth="4"
                     strokeLinecap="round" strokeDasharray={`${circ*pct/100} ${circ}`}
-                    transform="rotate(-90 20 20)" style={{transition:"stroke-dasharray 0.8s"}}/>
-                  <text x="20" y="24" textAnchor="middle" fontSize="9" fontWeight="700"
-                    fill={g.color} fontFamily="monospace">{pct}%</text>
+                    transform="rotate(-90 21 21)" style={{transition:"stroke-dasharray 0.8s cubic-bezier(0.2,0,0,1)"}}/>
+                  <text x="21" y="25" textAnchor="middle" fontSize="9.5" fontWeight="700" fill={g.color}>{pct}%</text>
                 </svg>
               </div>
-              <div style={{fontSize:24,fontWeight:800,color:g.color}}>{count}
-                <span style={{fontSize:11,color:"#4a5568",fontWeight:400,marginLeft:6}}>
+              <div style={{fontSize:26,fontWeight:700,color:g.color}}>{count}
+                <span style={{...TYPE.labelMd,color:MD.outline,fontWeight:500,marginLeft:8}}>
                   finding{count!==1?"s":""}
                 </span>
               </div>
@@ -953,25 +1219,29 @@ function Remediation({findings}) {
       </div>
 
       {/* Filter bar */}
-      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-        <span style={{fontSize:11,color:"#4a5568"}}>Filter:</span>
-        {["All",...Object.keys(groups)].map(k=>(
-          <button key={k} onClick={()=>setEffortFilter(k)}
-            style={{padding:"4px 12px",borderRadius:20,border:"none",cursor:"pointer",
-              fontSize:11,fontWeight:effortFilter===k?700:400,
-              background:effortFilter===k?(k==="All"?"#38bdf820":groups[k]?.color+"20"):"transparent",
-              color:effortFilter===k?(k==="All"?"#38bdf8":groups[k]?.color||"#38bdf8"):"#4a5568"}}>
-            {k==="All"?`All (${fail.length})`:groups[k]?.label+` (${groups[k]?.items?.length||0})`}
-          </button>
-        ))}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        <span style={{...TYPE.labelMd,color:MD.outline}}>Filter</span>
+        {["All",...Object.keys(groups)].map(k=>{
+          const active = effortFilter===k;
+          const c = k==="All"?MD.primary:groups[k]?.color;
+          return (
+            <button key={k} onClick={()=>setEffortFilter(k)}
+              style={{padding:"6px 14px",borderRadius:MD.radiusXl,border:"none",cursor:"pointer",
+                ...TYPE.labelLg,fontWeight:active?700:500,
+                background:active?c+"20":"transparent",
+                color:active?c:MD.outline}}>
+              {k==="All"?`All (${fail.length})`:groups[k]?.label+` (${groups[k]?.items?.length||0})`}
+            </button>
+          );
+        })}
         <div style={{flex:1}}/>
-        <span style={{fontSize:10,color:"#374458",fontFamily:"monospace"}}>
+        <span style={{...TYPE.labelMd,color:MD.outlineVar}}>
           {shown.length} items · click to expand
         </span>
       </div>
 
-      {/* Collapsed list — click to expand */}
-      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+      {/* Collapsed list */}
+      <div style={{display:"flex",flexDirection:"column",gap:5}}>
         {shown.map((f)=>{
           const r = REM[f.check_id];
           const sc = sev(f);
@@ -981,92 +1251,75 @@ function Remediation({findings}) {
           const hasContent = r?.steps?.length>0 || f.remediation_steps;
 
           return (
-            <div key={f.check_id} style={{background:"#1e293b",
-              border:`1px solid ${isOpen?"#374458":"#2d3748"}`,
-              borderRadius:8,overflow:"hidden",
-              borderLeft:`3px solid ${sc}`,transition:"border-color 0.15s"}}>
-              {/* Always-visible header row — click to expand */}
+            <div key={f.check_id} style={{background:MD.surfaceCont,
+              borderRadius:MD.radiusMd,overflow:"hidden",boxShadow:elevation(isOpen?2:1),
+              borderLeft:`3px solid ${sc}`,transition:"box-shadow 0.15s cubic-bezier(0.2,0,0,1)"}}>
               <button onClick={()=>setExpanded(isOpen?null:f.check_id)}
                 style={{width:"100%",background:"none",border:"none",cursor:"pointer",
-                  padding:"12px 16px",textAlign:"left",
-                  display:"flex",alignItems:"center",gap:10}}>
+                  padding:"13px 18px",textAlign:"left",
+                  display:"flex",alignItems:"center",gap:12}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"monospace",fontSize:9,color:"#374458"}}>{f.check_id}</span>
-                    <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
-                      background:sc+"18",color:sc,border:`1px solid ${sc}30`,fontWeight:700}}>{f.severity}</span>
-                    <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
-                      background:g.color+"12",color:g.color,border:`1px solid ${g.color}25`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                    <span style={{...TYPE.labelMd,color:MD.outlineVar}}>{f.check_id}</span>
+                    <Badge label={f.severity} color={sc} container={sevContainer(f)} small/>
+                    <span style={{...TYPE.labelMd,fontWeight:600,padding:"2px 8px",borderRadius:MD.radiusSm,
+                      background:g.color+"14",color:g.color}}>
                       {g.icon} {g.label}
                     </span>
-                    {!hasContent&&<span style={{fontSize:9,color:"#374458"}}>· no steps available</span>}
+                    {!hasContent&&<span style={{...TYPE.labelMd,color:MD.outlineVar}}>· no steps available</span>}
                   </div>
-                  <div style={{fontSize:13,fontWeight:600,color:"#d1d9e6",overflow:"hidden",
+                  <div style={{...TYPE.bodyLg,color:MD.onSurface,fontWeight:600,overflow:"hidden",
                     textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {r?.title||f.check_id}
                   </div>
                 </div>
-                {/* Score */}
-                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <div style={{width:50,height:4,background:"#111827",borderRadius:2}}>
-                    <div style={{height:"100%",borderRadius:2,background:sc,width:`${(f.score/10)*100}%`}}/>
-                  </div>
-                  <span style={{fontSize:11,fontWeight:800,color:sc,fontFamily:"monospace",minWidth:28}}>{f.score.toFixed(1)}</span>
-                </div>
-                {/* Chevron */}
-                <span style={{fontSize:12,color:"#374458",flexShrink:0,
+                <div style={{width:80,flexShrink:0}}><ScoreBar score={f.score}/></div>
+                <span style={{color:MD.outline,fontSize:12,flexShrink:0,
                   transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▼</span>
               </button>
 
-              {/* Expanded content */}
               {isOpen&&(
-                <div style={{borderTop:"1px solid #2d3748",padding:"12px 16px 14px",
-                  background:"#111827"}}>
+                <div style={{borderTop:`1px solid ${MD.outlineVar}`,padding:"14px 18px 16px",
+                  background:MD.surfaceDim}}>
                   {hasContent ? (
                     <>
-                      {/* Risk description */}
                       {(r?.risk||f.risk_description)&&(
-                        <div style={{marginBottom:12}}>
-                          <div style={{fontSize:9,color:"#fbbf24",fontWeight:700,
-                            letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>WHY THIS MATTERS</div>
-                          <p style={{fontSize:12,color:"#8896aa",lineHeight:1.7,margin:0}}>
+                        <div style={{marginBottom:14}}>
+                          <div style={{...TYPE.labelSm,color:SC.Medium,marginBottom:7}}>Why this matters</div>
+                          <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.7,margin:0}}>
                             {r?.risk||f.risk_description}
                           </p>
                         </div>
                       )}
-                      {/* Steps */}
-                      <div style={{background:"#1e293b",borderRadius:6,padding:"10px 14px"}}>
-                        <div style={{fontSize:9,color:"#34d399",fontWeight:700,
-                          letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:10}}>ACTION REQUIRED</div>
+                      <div style={{background:MD.surfaceCont,borderRadius:MD.radiusMd,padding:"12px 16px"}}>
+                        <div style={{...TYPE.labelSm,color:SC.Low,marginBottom:11}}>Action required</div>
                         {r?.steps ? (
-                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          <div style={{display:"flex",flexDirection:"column",gap:7}}>
                             {r.steps.map((s,i)=>(
-                              <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                                <div style={{width:18,height:18,borderRadius:"50%",
-                                  background:"#0ea5e918",border:"1px solid #0ea5e940",
+                              <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start"}}>
+                                <div style={{width:20,height:20,borderRadius:"50%",
+                                  background:MD.primaryContainer,
                                   display:"flex",alignItems:"center",justifyContent:"center",
-                                  fontSize:9,fontWeight:700,color:"#38bdf8",
-                                  flexShrink:0,fontFamily:"monospace"}}>{i+1}</div>
-                                <span style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,paddingTop:1}}>{s}</span>
+                                  fontSize:9.5,fontWeight:700,color:MD.onPrimaryContainer,flexShrink:0}}>{i+1}</div>
+                                <span style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.65,paddingTop:1}}>{s}</span>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,margin:0}}>
+                          <p style={{...TYPE.bodyMd,color:MD.onSurfaceVar,lineHeight:1.65,margin:0}}>
                             {f.remediation_steps}
                           </p>
                         )}
                         {r?.ref&&(
                           <a href={r.ref} target="_blank"
-                            style={{display:"inline-block",marginTop:10,fontSize:10,
-                              color:"#38bdf8",textDecoration:"none",fontFamily:"monospace"}}>
-                            ↗ Microsoft Documentation
+                            style={{display:"inline-block",marginTop:12,...TYPE.labelMd,
+                              color:MD.primary,textDecoration:"none"}}>
+                            ↗ Microsoft documentation
                           </a>
                         )}
                       </div>
-                      {/* Affected resources */}
                       {f.affected_resources?.length>0&&(
-                        <div style={{marginTop:8,fontSize:10,color:"#374458",fontFamily:"monospace"}}>
+                        <div style={{marginTop:10,...TYPE.labelMd,color:MD.outlineVar}}>
                           ⚠ {f.affected_resources.length} affected resource{f.affected_resources.length!==1?"s":""}
                           {f.affected_resources[0]&&typeof f.affected_resources[0]==="object"&&
                             ` — ${Object.values(f.affected_resources[0])[0]}`}
@@ -1074,16 +1327,16 @@ function Remediation({findings}) {
                       )}
                     </>
                   ) : (
-                    <div style={{padding:"12px 0"}}>
-                      <div style={{fontSize:9,color:"#374458",fontWeight:700,
-                        letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>REMEDIATION</div>
-                      <p style={{fontSize:12,color:"#64748b",lineHeight:1.65,margin:0}}>
+                    <div style={{padding:"4px 0"}}>
+                      <div style={{...TYPE.labelSm,color:MD.outlineVar,marginBottom:9}}>Remediation</div>
+                      <p style={{...TYPE.bodyMd,color:MD.outline,lineHeight:1.65,margin:0}}>
                         Review this control in the Microsoft Entra ID portal. Check the Findings tab
                         for the raw evidence, then consult{" "}
                         <a href="https://learn.microsoft.com/en-us/entra/identity/" target="_blank"
-                          style={{color:"#38bdf8"}}>Microsoft documentation</a>
-                        {" "}for remediation steps specific to{" "}<code style={{fontFamily:"monospace",fontSize:11,
-                          color:"#8896aa"}}>{f.check_id}</code>.
+                          style={{color:MD.primary}}>Microsoft documentation</a>
+                        {" "}for remediation steps specific to{" "}
+                        <code style={{fontFamily:"'Roboto Mono',ui-monospace,monospace",fontSize:11.5,
+                          color:MD.onSurfaceVar}}>{f.check_id}</code>.
                       </p>
                     </div>
                   )}
@@ -1112,12 +1365,7 @@ function Users({authUser}) {
   const load = async () => {
     try {
       const r = await authFetch("/api/v1/users");
-
-      if (!r.ok) {
-        const txt = await r.text();
-        throw new Error(txt);
-      }
-
+      if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
       const data = await r.json();
       setUsers(data.items || []);
     } catch (e) {
@@ -1188,89 +1436,86 @@ function Users({authUser}) {
     } catch(e) { setErr(e.message); }
   };
 
-  const ROLE_COLOR = {admin:"#f87171", viewer:"#38bdf8"};
+  // Role color kept distinct from severity semantics — admin isn't "danger",
+  // it's a role tier, so it takes the primary hue rather than SC.Critical
+  const ROLE_COLOR = {admin:MD.primary, viewer:SC.Info};
+  const ROLE_CONTAINER = {admin:MD.primaryContainer, viewer:SC_CONTAINER.Info};
 
   return (
-    <div style={{animation:"fadeIn 0.3s ease"}}>
+    <div style={{animation:"fadeIn 0.3s cubic-bezier(0.2,0,0,1)"}}>
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
         <div>
-          <div style={{fontSize:16,fontWeight:700,color:"#d1d9e6"}}>User Management</div>
-          <div style={{fontSize:11,color:"#4a5568",marginTop:2}}>
+          <div style={{...TYPE.titleLg,color:MD.onSurface}}>User management</div>
+          <div style={{...TYPE.bodySm,color:MD.outline,marginTop:3}}>
             Manage who can access this EntraGuard instance. Auth must be enabled in .env.
           </div>
         </div>
         <div style={{flex:1}}/>
         {isAdmin&&(
           <button onClick={openCreate}
-            style={{padding:"8px 16px",background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
-              border:"none",borderRadius:6,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            + Add User
+            style={{padding:"10px 20px",background:MD.primaryDim,
+              border:"none",borderRadius:MD.radiusXl,color:MD.surfaceDim,...TYPE.labelLg,fontWeight:700,
+              cursor:"pointer",boxShadow:elevation(1)}}>
+            + Add user
           </button>
         )}
       </div>
 
       {/* Notices */}
-      {msg&&<div style={{marginBottom:12,padding:"8px 14px",background:"rgba(52,211,153,0.1)",
-        border:"1px solid rgba(52,211,153,0.3)",borderRadius:6,fontSize:12,color:"#34d399"}}>{msg}</div>}
-      {err&&<div style={{marginBottom:12,padding:"8px 14px",background:"rgba(248,113,113,0.1)",
-        border:"1px solid rgba(248,113,113,0.3)",borderRadius:6,fontSize:12,color:"#f87171"}}>{err}</div>}
+      {msg&&<div style={{marginBottom:14,padding:"10px 16px",background:SC_CONTAINER.Low,
+        borderRadius:MD.radiusMd,...TYPE.bodyMd,color:SC.Low}}>{msg}</div>}
+      {err&&<div style={{marginBottom:14,padding:"10px 16px",background:SC_CONTAINER.Critical,
+        borderRadius:MD.radiusMd,...TYPE.bodyMd,color:SC.Critical}}>{err}</div>}
 
-      {/* Info banner if auth is disabled */}
-      <div style={{marginBottom:16,padding:"10px 14px",background:"rgba(251,191,36,0.06)",
-        border:"1px solid rgba(251,191,36,0.2)",borderRadius:6,fontSize:11,color:"#fbbf24"}}>
-        ℹ Users added here can sign in when <code style={{fontFamily:"monospace"}}>AUTH_ENABLED=true</code> is set in .env.
-        The built-in admin from <code style={{fontFamily:"monospace"}}>LOCAL_ADMIN_USERNAME/PASSWORD</code> always has access.
+      {/* Info banner */}
+      <div style={{marginBottom:18,padding:"12px 16px",background:SC_CONTAINER.Medium,
+        borderRadius:MD.radiusMd,...TYPE.bodySm,color:SC.Medium,lineHeight:1.6}}>
+        Users added here can sign in when <code style={{fontFamily:"'Roboto Mono',ui-monospace,monospace"}}>AUTH_ENABLED=true</code> is set in .env.
+        The built-in admin from <code style={{fontFamily:"'Roboto Mono',ui-monospace,monospace"}}>LOCAL_ADMIN_USERNAME/PASSWORD</code> always has access.
       </div>
 
-      {/* User table */}
+      {/* User list */}
       {loading ? (
-        <div style={{textAlign:"center",padding:40,color:"#4a5568"}}>Loading users…</div>
+        <div style={{textAlign:"center",padding:48,color:MD.outline}}>Loading users…</div>
       ) : (
-        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {users.map(u=>(
-            <div key={u.username} style={{background:"#1e293b",border:"1px solid #2d3748",
-              borderRadius:8,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,
-              opacity:u.active?1:0.5}}>
-              {/* Avatar */}
-              <div style={{width:36,height:36,borderRadius:"50%",
-                background:`linear-gradient(135deg,${ROLE_COLOR[u.role]||"#64748b"}30,${ROLE_COLOR[u.role]||"#64748b"}15)`,
-                border:`1px solid ${ROLE_COLOR[u.role]||"#64748b"}40`,
+            <div key={u.username} style={{background:MD.surfaceCont,boxShadow:elevation(1),
+              borderRadius:MD.radiusMd,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,
+              opacity:u.active?1:0.55}}>
+              {/* Avatar — MD3 tonal circle, no gradient */}
+              <div style={{width:40,height:40,borderRadius:"50%",
+                background:ROLE_CONTAINER[u.role]||MD.surfaceHigh,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:13,fontWeight:700,color:ROLE_COLOR[u.role]||"#64748b",flexShrink:0}}>
+                fontSize:14,fontWeight:700,color:ROLE_COLOR[u.role]||MD.outline,flexShrink:0}}>
                 {(u.name||u.username).slice(0,1).toUpperCase()}
               </div>
-              {/* Info */}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:"#d1d9e6"}}>{u.name}</div>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
-                  <span style={{fontFamily:"monospace",fontSize:10,color:"#4a5568"}}>{u.username}</span>
-                  <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,
-                    background:ROLE_COLOR[u.role]+"18",color:ROLE_COLOR[u.role],
-                    border:`1px solid ${ROLE_COLOR[u.role]}30`,fontWeight:700,textTransform:"uppercase"}}>
-                    {u.role}
-                  </span>
-                  {u.builtin&&<span style={{fontSize:9,color:"#374458"}}>Built-in</span>}
-                  {!u.active&&<span style={{fontSize:9,color:"#f87171"}}>Disabled</span>}
+                <div style={{...TYPE.bodyLg,color:MD.onSurface,fontWeight:600}}>{u.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:9,marginTop:3}}>
+                  <span style={{...TYPE.labelMd,color:MD.outline}}>{u.username}</span>
+                  <Badge label={u.role} color={ROLE_COLOR[u.role]} container={ROLE_CONTAINER[u.role]} small/>
+                  {u.builtin&&<span style={{...TYPE.labelMd,color:MD.outlineVar}}>Built-in</span>}
+                  {!u.active&&<span style={{...TYPE.labelMd,color:SC.Critical}}>Disabled</span>}
                 </div>
               </div>
-              {/* Actions */}
               {isAdmin&&!u.builtin&&(
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <div style={{display:"flex",gap:7,flexShrink:0}}>
                   <button onClick={()=>toggleActive(u)}
-                    style={{padding:"4px 10px",background:"transparent",
-                      border:`1px solid ${u.active?"#2d3748":"#34d39940"}`,
-                      color:u.active?"#64748b":"#34d399",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    style={{padding:"6px 14px",background:"transparent",
+                      border:`1px solid ${u.active?MD.outlineVar:SC_CONTAINER.Low}`,
+                      color:u.active?MD.outlineVar:SC.Low,borderRadius:MD.radiusXl,...TYPE.labelMd,fontWeight:600,cursor:"pointer"}}>
                     {u.active?"Disable":"Enable"}
                   </button>
                   <button onClick={()=>openEdit(u)}
-                    style={{padding:"4px 10px",background:"transparent",
-                      border:"1px solid #2d3748",color:"#8896aa",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    style={{padding:"6px 14px",background:"transparent",
+                      border:`1px solid ${MD.outlineVar}`,color:MD.onSurfaceVar,borderRadius:MD.radiusXl,...TYPE.labelMd,fontWeight:600,cursor:"pointer"}}>
                     Edit
                   </button>
                   <button onClick={()=>deleteUser(u.username)}
-                    style={{padding:"4px 10px",background:"transparent",
-                      border:"1px solid #f8717140",color:"#f87171",borderRadius:4,fontSize:10,cursor:"pointer"}}>
+                    style={{padding:"6px 14px",background:"transparent",
+                      border:`1px solid ${SC_CONTAINER.Critical}`,color:SC.Critical,borderRadius:MD.radiusXl,...TYPE.labelMd,fontWeight:600,cursor:"pointer"}}>
                     Delete
                   </button>
                 </div>
@@ -1278,83 +1523,87 @@ function Users({authUser}) {
             </div>
           ))}
           {users.length===0&&(
-            <div style={{textAlign:"center",padding:40,color:"#374458",fontSize:13}}>
-              No additional users. Click Add User to create one.
+            <div style={{textAlign:"center",padding:48,color:MD.outlineVar,...TYPE.bodyMd}}>
+              No additional users. Click "Add user" to create one.
             </div>
           )}
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/edit dialog — MD3 scrim + elevated dp5 surface */}
       {showForm&&(
-        <div style={{position:"fixed",inset:0,background:"#00000090",display:"flex",
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",
           alignItems:"center",justifyContent:"center",zIndex:999}}
           onClick={()=>setShowForm(false)}>
           <div onClick={e=>e.stopPropagation()}
-            style={{background:"#1e293b",border:"1px solid #2d3748",borderRadius:12,
-              width:"min(440px,95vw)",padding:24}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#d1d9e6",marginBottom:20}}>
-              {editUser?"Edit User":"Add New User"}
+            style={{background:MD.surfaceHigh,borderRadius:MD.radiusXl,boxShadow:elevation(5),
+              width:"min(460px,95vw)",padding:28}}>
+            <div style={{...TYPE.titleMd,color:MD.onSurface,marginBottom:22}}>
+              {editUser?"Edit user":"Add new user"}
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
               {!editUser&&(
                 <div>
-                  <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>USERNAME</div>
+                  <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:7}}>Username</div>
                   <input value={form.username} onChange={e=>setForm({...form,username:e.target.value})}
                     placeholder="john.smith"
-                    style={{width:"100%",padding:"9px 12px",background:"#111827",
-                      border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                    style={{width:"100%",padding:"11px 14px",background:MD.surfaceDim,
+                      border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusMd,color:MD.onSurface,...TYPE.bodyMd,
                       boxSizing:"border-box"}}/>
                 </div>
               )}
               <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>DISPLAY NAME</div>
+                <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:7}}>Display name</div>
                 <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
                   placeholder="John Smith"
-                  style={{width:"100%",padding:"9px 12px",background:"#111827",
-                    border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                  style={{width:"100%",padding:"11px 14px",background:MD.surfaceDim,
+                    border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusMd,color:MD.onSurface,...TYPE.bodyMd,
                     boxSizing:"border-box"}}/>
               </div>
               <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:6,fontWeight:500}}>
-                  {editUser?"NEW PASSWORD (leave blank to keep current)":"PASSWORD"}
+                <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:7}}>
+                  {editUser?"New password (leave blank to keep current)":"Password"}
                 </div>
                 <input type="password" value={form.password}
                   onChange={e=>setForm({...form,password:e.target.value})}
-                  placeholder={editUser?"••••••••  (unchanged)":"Minimum 8 characters"}
-                  style={{width:"100%",padding:"9px 12px",background:"#111827",
-                    border:"1px solid #2d3748",borderRadius:6,color:"#d1d9e6",fontSize:13,
+                  placeholder={editUser?"Unchanged":"Minimum 8 characters"}
+                  style={{width:"100%",padding:"11px 14px",background:MD.surfaceDim,
+                    border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusMd,color:MD.onSurface,...TYPE.bodyMd,
                     boxSizing:"border-box"}}/>
               </div>
               <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:8,fontWeight:500}}>ROLE</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:9}}>Role</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   {[["admin","Admin","Full access — can scan, manage users, and view all findings"],
                     ["viewer","Viewer","Read-only — can view findings and reports but cannot scan or manage users"]
-                  ].map(([val,label,desc])=>(
-                    <button key={val} onClick={()=>setForm({...form,role:val})}
-                      style={{padding:"10px 12px",textAlign:"left",borderRadius:6,cursor:"pointer",
-                        background:form.role===val?ROLE_COLOR[val]+"18":"#111827",
-                        border:`2px solid ${form.role===val?ROLE_COLOR[val]:"#2d3748"}`,
-                        color:form.role===val?ROLE_COLOR[val]:"#64748b",transition:"all 0.15s"}}>
-                      <div style={{fontWeight:700,fontSize:12}}>{label}</div>
-                      <div style={{fontSize:10,marginTop:3,lineHeight:1.4,
-                        color:form.role===val?ROLE_COLOR[val]+"cc":"#374458"}}>{desc}</div>
-                    </button>
-                  ))}
+                  ].map(([val,label,desc])=>{
+                    const active = form.role===val;
+                    const c = ROLE_COLOR[val];
+                    return (
+                      <button key={val} onClick={()=>setForm({...form,role:val})}
+                        style={{padding:"12px 14px",textAlign:"left",borderRadius:MD.radiusMd,cursor:"pointer",
+                          background:active?c+"16":MD.surfaceDim,
+                          border:`1px solid ${active?c:MD.outlineVar}`,
+                          color:active?c:MD.outline,transition:"all 0.15s"}}>
+                        <div style={{fontWeight:700,fontSize:13}}>{label}</div>
+                        <div style={{...TYPE.labelMd,marginTop:4,lineHeight:1.5,
+                          color:active?c+"cc":MD.outlineVar}}>{desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              {err&&<div style={{fontSize:12,color:"#f87171",padding:"8px 12px",
-                background:"rgba(248,113,113,0.08)",borderRadius:6}}>{err}</div>}
-              <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+              {err&&<div style={{...TYPE.bodySm,color:SC.Critical,padding:"10px 14px",
+                background:SC_CONTAINER.Critical,borderRadius:MD.radiusMd}}>{err}</div>}
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
                 <button onClick={()=>setShowForm(false)}
-                  style={{padding:"8px 16px",background:"transparent",border:"1px solid #2d3748",
-                    color:"#64748b",borderRadius:6,fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  style={{padding:"9px 18px",background:"transparent",border:"none",
+                    color:MD.onSurfaceVar,borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:600,cursor:"pointer"}}>Cancel</button>
                 <button onClick={save} disabled={saving}
-                  style={{padding:"8px 20px",background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
-                    border:"none",color:"#fff",borderRadius:6,fontSize:12,fontWeight:600,
-                    cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1}}>
-                  {saving?"Saving…":editUser?"Save Changes":"Create User"}
+                  style={{padding:"9px 22px",background:saving?MD.surfaceHigh:MD.primaryDim,
+                    border:"none",color:saving?MD.outline:MD.surfaceDim,borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:700,
+                    cursor:saving?"not-allowed":"pointer",boxShadow:saving?"none":elevation(1)}}>
+                  {saving?"Saving…":editUser?"Save changes":"Create user"}
                 </button>
               </div>
             </div>
@@ -1367,25 +1616,26 @@ function Users({authUser}) {
 
 function History({runs}) {
   return (
-    <div style={{animation:"fadeIn 0.25s ease",display:"flex",flexDirection:"column",gap:4}}>
-      {runs.length===0&&<div style={{textAlign:"center",padding:48,color:"#374458",fontSize:11,fontFamily:"monospace"}}>NO SCAN HISTORY — RUN FIRST SCAN</div>}
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)",display:"flex",flexDirection:"column",gap:6}}>
+      {runs.length===0&&<div style={{textAlign:"center",padding:56,color:MD.outlineVar,...TYPE.bodyMd}}>No scan history — run first scan</div>}
       {runs.map((r,i)=>{
-        const sc=r.status==="completed"?"#34d399":r.status==="running"?"#fcd34d":"#f87171";
+        const sc=r.status==="completed"?SC.Low:r.status==="running"?SC.Medium:SC.Critical;
+        const cc=r.status==="completed"?SC_CONTAINER.Low:r.status==="running"?SC_CONTAINER.Medium:SC_CONTAINER.Critical;
         return (
-          <div key={r.id} style={{background:"#1e293b",border:"1px solid #2d3748",borderRadius:6,padding:"11px 14px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:9,color:"#374458",minWidth:24,fontFamily:"monospace"}}>#{runs.length-i}</span>
-              <span style={{width:7,height:7,borderRadius:"50%",background:sc,flexShrink:0}}/>
-              <Badge label={r.status.toUpperCase()} color={sc} small/>
-              <span style={{fontSize:11,color:"#5a6a7e",fontFamily:"monospace"}}>
+          <div key={r.id} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd,padding:"13px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <span style={{...TYPE.labelMd,color:MD.outlineVar,minWidth:26}}>#{runs.length-i}</span>
+              <span style={{width:8,height:8,borderRadius:"50%",background:sc,flexShrink:0}}/>
+              <Badge label={r.status.toUpperCase()} color={sc} container={cc} small/>
+              <span style={{...TYPE.bodySm,color:MD.outline}}>
                 {r.created_at?new Date(r.created_at).toLocaleString():"—"}
               </span>
               {r.status==="completed"&&<>
-                <div style={{flex:1,height:1,background:"#2d3748"}}/>
-                <span style={{fontSize:10,color:"#34d399",fontFamily:"monospace"}}>{r.checks_passed}P</span>
-                <span style={{fontSize:10,color:"#f87171",fontFamily:"monospace"}}>{r.checks_failed}F</span>
-                <span style={{fontSize:10,color:"#4a5568",fontFamily:"monospace"}}>{r.checks_skipped}S</span>
-                <span style={{fontSize:9,color:"#374458",fontFamily:"monospace"}}>{r.checks_total} total</span>
+                <div style={{flex:1,height:1,background:MD.outlineVar}}/>
+                <span style={{...TYPE.labelMd,color:SC.Low,fontWeight:700}}>{r.checks_passed}P</span>
+                <span style={{...TYPE.labelMd,color:SC.Critical,fontWeight:700}}>{r.checks_failed}F</span>
+                <span style={{...TYPE.labelMd,color:MD.outline}}>{r.checks_skipped}S</span>
+                <span style={{...TYPE.labelMd,color:MD.outlineVar}}>{r.checks_total} total</span>
               </>}
             </div>
           </div>
@@ -1395,7 +1645,6 @@ function History({runs}) {
   );
 }
 
-// ─── Exceptions ───────────────────────────────────────────────────────────────
 function Exceptions({findings}) {
   const [exs, setExs] = useState(() => {
     try { return JSON.parse(localStorage.getItem("eg-exceptions") || "{}"); } catch { return {}; }
@@ -1426,36 +1675,36 @@ function Exceptions({findings}) {
   const ackd = Object.values(exs);
 
   return (
-    <div style={{animation:"fadeIn 0.25s ease"}}>
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)"}}>
       {/* Summary */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
         {Object.entries(EXS).map(([k,m])=>(
-          <div key={k} style={{background:"#1e293b",border:`1px solid ${m.c}25`,borderRadius:8,padding:"12px 14px"}}>
-            <div style={{fontSize:9,color:m.c,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace"}}>{m.l.toUpperCase()}</div>
-            <div style={{fontSize:26,fontWeight:800,color:m.c,marginTop:4,fontFamily:"monospace"}}>{ackd.filter(e=>e.status===k).length}</div>
+          <div key={k} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd,padding:"14px 16px"}}>
+            <div style={{...TYPE.labelSm,color:m.c}}>{m.l}</div>
+            <div style={{fontSize:28,fontWeight:700,color:m.c,marginTop:6}}>{ackd.filter(e=>e.status===k).length}</div>
           </div>
         ))}
       </div>
 
       {/* Acknowledged */}
       {ackd.length>0&&(
-        <div style={{marginBottom:20}}>
-          <div style={{fontSize:9,color:"#4a5568",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>ACKNOWLEDGED ({ackd.length})</div>
-          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        <div style={{marginBottom:22}}>
+          <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:10}}>Acknowledged ({ackd.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
             {ackd.map(ex=>{const m=EXS[ex.status]||EXS.fixed;const t=REM[ex.check_id]?.title||ex.check_id;
               return (
-                <div key={ex.check_id} style={{background:"#1e293b",border:`1px solid ${m.c}35`,borderRadius:5,padding:"9px 12px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"monospace",fontSize:9,color:"#4a5568",minWidth:120,flexShrink:0}}>{ex.check_id}</span>
-                    <span style={{flex:1,fontSize:11,color:"#8896aa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
-                    <Badge label={`${m.i} ${m.l}`} color={m.c} small/>
-                    {ex.note&&<span style={{fontSize:10,color:"#4a5568",fontStyle:"italic",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>"{ex.note}"</span>}
+                <div key={ex.check_id} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd,padding:"10px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <span style={{...TYPE.labelMd,color:MD.outline,minWidth:130,flexShrink:0}}>{ex.check_id}</span>
+                    <span style={{flex:1,...TYPE.bodySm,color:MD.onSurfaceVar,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
+                    <Badge label={`${m.i} ${m.l}`} color={m.c} container={m.cc} small/>
+                    {ex.note&&<span style={{...TYPE.bodySm,color:MD.outlineVar,fontStyle:"italic",maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>"{ex.note}"</span>}
                     <button onClick={()=>{setForm(ex.check_id);setFSt(ex.status);setFNote(ex.note||"");}}
-                      style={{padding:"2px 8px",background:"transparent",border:"1px solid #2d3748",
-                        color:"#4a5568",borderRadius:3,fontSize:9,cursor:"pointer",fontFamily:"monospace"}}>EDIT</button>
+                      style={{padding:"4px 12px",background:"transparent",border:`1px solid ${MD.outlineVar}`,
+                        color:MD.outline,borderRadius:MD.radiusXl,...TYPE.labelMd,cursor:"pointer"}}>Edit</button>
                     <button onClick={()=>{const u={...exs};delete u[ex.check_id];save(u);}}
-                      style={{padding:"2px 8px",background:"transparent",border:"1px solid #f8717130",
-                        color:"#f87171",borderRadius:3,fontSize:9,cursor:"pointer",fontFamily:"monospace"}}>REVOKE</button>
+                      style={{padding:"4px 12px",background:"transparent",border:`1px solid ${SC_CONTAINER.Critical}`,
+                        color:SC.Critical,borderRadius:MD.radiusXl,...TYPE.labelMd,cursor:"pointer"}}>Revoke</button>
                   </div>
                 </div>
               );
@@ -1465,92 +1714,95 @@ function Exceptions({findings}) {
       )}
 
       {/* Active findings */}
-      <div style={{fontSize:9,color:"#4a5568",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>
-        ACTIVE FINDINGS — CLICK TO ACKNOWLEDGE ({filt.length})
+      <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:10}}>
+        Active findings — click to acknowledge ({filt.length})
       </div>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Filter by check ID or title…"
-        style={{width:"100%",padding:"7px 11px",background:"#1e293b",border:"1px solid #2d3748",
-          color:"#8896aa",borderRadius:5,fontSize:11,marginBottom:8,fontFamily:"inherit"}}/>
-      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        style={{width:"100%",padding:"10px 14px",background:MD.surfaceHigh,border:`1px solid ${MD.outlineVar}`,
+          color:MD.onSurface,borderRadius:MD.radiusXl,...TYPE.bodyMd,marginBottom:10,fontFamily:"inherit",
+          boxSizing:"border-box"}}/>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {filt.map(f=>{
           const ex=exs[f.check_id];const m=ex?EXS[ex.status]:null;const t=REM[f.check_id]?.title||f.check_id;
           return (
-            <div key={f.check_id} style={{background:"#1e293b",
-              border:`1px solid ${ex?EXS[ex.status].c+"45":"#2d3748"}`,borderRadius:5}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",flexWrap:"wrap"}}>
+            <div key={f.check_id} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",flexWrap:"wrap"}}>
                 <div style={{width:3,background:sev(f),alignSelf:"stretch",borderRadius:2,flexShrink:0}}/>
-                <span style={{fontFamily:"monospace",fontSize:9,color:"#4a5568",minWidth:120,flexShrink:0}}>{f.check_id}</span>
-                <span style={{flex:1,fontSize:11,color:"#8896aa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
-                <Badge label={f.severity} color={sev(f)} small/>
+                <span style={{...TYPE.labelMd,color:MD.outline,minWidth:130,flexShrink:0}}>{f.check_id}</span>
+                <span style={{flex:1,...TYPE.bodySm,color:MD.onSurfaceVar,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
+                <Badge label={f.severity} color={sev(f)} container={sevContainer(f)} small/>
                 {ex?(
-                  <Badge label={`${m.i} ${m.l}`} color={m.c} small/>
+                  <Badge label={`${m.i} ${m.l}`} color={m.c} container={m.cc} small/>
                 ):(
                   <button onClick={()=>{setForm(f.check_id);setFSt("fixed");setFNote("");}}
-                    style={{padding:"5px 14px",background:"#38bdf818",
-                      border:"1px solid #38bdf840",color:"#38bdf8",
-                      borderRadius:4,fontSize:10,fontWeight:700,cursor:"pointer",
-                      fontFamily:"monospace",flexShrink:0,letterSpacing:"0.05em"}}>+ ACK</button>
+                    style={{padding:"6px 16px",background:MD.primaryContainer,
+                      border:"none",color:MD.onPrimaryContainer,
+                      borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:700,cursor:"pointer",
+                      flexShrink:0}}>+ Acknowledge</button>
                 )}
               </div>
             </div>
           );
         })}
-        {filt.length===0&&<div style={{textAlign:"center",padding:24,color:"#374458",fontSize:11,fontFamily:"monospace"}}>NO ACTIVE FINDINGS</div>}
+        {filt.length===0&&<div style={{textAlign:"center",padding:28,color:MD.outlineVar,...TYPE.bodyMd}}>No active findings</div>}
       </div>
 
       {/* Modal */}
       {form&&(
-        <div style={{position:"fixed",inset:0,background:"#00000095",display:"flex",
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",
           alignItems:"center",justifyContent:"center",zIndex:9999}}
           onClick={()=>setForm(null)}>
           <div onClick={e=>e.stopPropagation()}
-            style={{background:"#1e293b",border:"1px solid #1e4a7a",borderRadius:10,
-              width:"min(480px,95vw)",padding:24,
-              boxShadow:"0 40px 80px #000c,0 0 0 1px #2d3748"}}>
-            <div style={{fontSize:9,color:"#38bdf8",fontWeight:700,letterSpacing:"0.12em",
-              fontFamily:"monospace",marginBottom:4}}>ACKNOWLEDGE FINDING</div>
-            <div style={{fontFamily:"monospace",fontSize:10,color:"#4a5568",marginBottom:4}}>{form}</div>
-            <div style={{fontSize:14,fontWeight:600,color:"#d1d9e6",marginBottom:20,lineHeight:1.4}}>
+            style={{background:MD.surfaceHigh,borderRadius:MD.radiusXl,
+              width:"min(480px,95vw)",padding:28,boxShadow:elevation(5)}}>
+            <div style={{...TYPE.labelSm,color:MD.primary,marginBottom:6}}>Acknowledge finding</div>
+            <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:5}}>{form}</div>
+            <div style={{...TYPE.titleMd,color:MD.onSurface,marginBottom:22,lineHeight:1.4}}>
               {REM[form]?.title||form}
             </div>
 
-            <div style={{fontSize:9,color:"#4a5568",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:10}}>STATUS</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:18}}>
-              {Object.entries(EXS).map(([k,m])=>(
-                <button key={k} onClick={()=>setFSt(k)}
-                  style={{padding:"10px 12px",textAlign:"left",borderRadius:6,
-                    background:fSt===k?m.c+"22":"#111827",
-                    border:`2px solid ${fSt===k?m.c:"#2d3748"}`,
-                    color:fSt===k?m.c:"#4a5568",
-                    fontSize:11,fontWeight:fSt===k?700:400,cursor:"pointer",
-                    display:"flex",alignItems:"center",gap:8,transition:"all 0.12s"}}>
-                  <span style={{fontSize:17}}>{m.i}</span>{m.l}
-                </button>
-              ))}
+            <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:11}}>Status</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+              {Object.entries(EXS).map(([k,m])=>{
+                const active = fSt===k;
+                return (
+                  <button key={k} onClick={()=>setFSt(k)}
+                    style={{padding:"11px 14px",textAlign:"left",borderRadius:MD.radiusMd,
+                      background:active?m.c+"18":MD.surfaceDim,
+                      border:`1px solid ${active?m.c:MD.outlineVar}`,
+                      color:active?m.c:MD.outline,
+                      ...TYPE.bodyMd,fontWeight:active?700:500,cursor:"pointer",
+                      display:"flex",alignItems:"center",gap:9,transition:"all 0.15s"}}>
+                    <span style={{fontSize:17}}>{m.i}</span>{m.l}
+                  </button>
+                );
+              })}
             </div>
 
-            <div style={{fontSize:9,color:"#4a5568",fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:6}}>NOTES</div>
+            <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:8}}>Notes</div>
             <textarea value={fNote} onChange={e=>setFNote(e.target.value)}
               placeholder="e.g. Compensating control in place — SIEM alert active. Review Q3 2026."
-              style={{width:"100%",height:76,padding:"8px 11px",background:"#111827",
-                border:"1px solid #2d3748",color:"#8896aa",borderRadius:5,
-                fontSize:11,resize:"vertical",marginBottom:16,fontFamily:"inherit",
-                lineHeight:1.6}}/>
+              style={{width:"100%",height:80,padding:"11px 14px",background:MD.surfaceDim,
+                border:`1px solid ${MD.outlineVar}`,color:MD.onSurfaceVar,borderRadius:MD.radiusMd,
+                ...TYPE.bodyMd,resize:"vertical",marginBottom:18,fontFamily:"inherit",
+                boxSizing:"border-box"}}/>
 
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={()=>setForm(null)}
-                style={{padding:"8px 16px",background:"transparent",border:"1px solid #2d3748",
-                  color:"#4a5568",borderRadius:5,fontSize:11,cursor:"pointer"}}>Cancel</button>
+                style={{padding:"9px 18px",background:"transparent",border:"none",
+                  color:MD.onSurfaceVar,borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:600,cursor:"pointer"}}>Cancel</button>
               <button onClick={()=>saveEx(form)} disabled={saving}
-                style={{padding:"8px 22px",minWidth:170,justifyContent:"center",
-                  background:saved?"#34d399":saving?"#38bdf860":"linear-gradient(135deg,#38bdf8,#818cf8)",
-                  color:"#fff",borderRadius:5,fontSize:11,fontWeight:700,
+                style={{padding:"9px 24px",minWidth:180,justifyContent:"center",
+                  background:saved?SC.Low:saving?MD.surfaceHigh:MD.primaryDim,
+                  color:saved?MD.surfaceDim:saving?MD.outline:MD.surfaceDim,
+                  borderRadius:MD.radiusXl,...TYPE.labelLg,fontWeight:700,
                   border:"none",cursor:saving?"not-allowed":"pointer",
-                  display:"flex",alignItems:"center",gap:8,transition:"background 0.2s"}}>
-                {saving?<><div style={{width:11,height:11,border:"2px solid #fff",
+                  display:"flex",alignItems:"center",gap:9,
+                  boxShadow:saving?"none":elevation(1),transition:"background 0.2s"}}>
+                {saving?<><div style={{width:12,height:12,border:`2px solid ${MD.outline}`,
                   borderTopColor:"transparent",borderRadius:"50%",
                   animation:"spin 0.7s linear infinite"}}/>Saving…</>
-                  :saved?"✓ Saved!":"Save Acknowledgement"}
+                  :saved?"✓ Saved":"Save acknowledgement"}
               </button>
             </div>
           </div>
@@ -1653,7 +1905,7 @@ export default function App() {
       await apiPost("/assessments/run",{target_id:list[0].id});
       if(poll.current)clearInterval(poll.current);
       poll.current=setInterval(load,3000);
-    }catch(e){alert("Scan failed: "+e);setScanning(false);}
+    }catch(e){alert(e?.message==="403"?"Only admins can start a scan.":"Scan failed: "+e);setScanning(false);}
   };
 
   const fail=findings.filter(f=>f.status==="failed");
@@ -1672,11 +1924,11 @@ export default function App() {
 
   // Loading
   if (authLoading) return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#111827"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:MD.surfaceDim}}>
       <div style={{textAlign:"center"}}>
-        <div style={{width:40,height:40,border:"3px solid #1e293b",borderTopColor:"#0ea5e9",
+        <div style={{width:40,height:40,border:`3px solid ${MD.surfaceHigh}`,borderTopColor:MD.primaryDim,
           borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto 16px"}}/>
-        <div style={{color:"#475569",fontSize:12,fontFamily:"monospace"}}>LOADING…</div>
+        <div style={{color:MD.outline,...TYPE.labelLg}}>Loading…</div>
       </div>
     </div>
   );
@@ -1690,35 +1942,34 @@ export default function App() {
     <>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:#111827;color:#d1d9e6;font-family:'Inter',system-ui,sans-serif;
+        body{background:${MD.surfaceDim};color:${MD.onSurface};font-family:'Inter',system-ui,sans-serif;
           font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
-        ::-webkit-scrollbar{width:4px;height:4px;}
-        ::-webkit-scrollbar-track{background:#1a2332;}
-        ::-webkit-scrollbar-thumb{background:#374458;border-radius:2px;}
-        ::-webkit-scrollbar-thumb:hover{background:#4a5568;}
+        ::-webkit-scrollbar{width:5px;height:5px;}
+        ::-webkit-scrollbar-track{background:${MD.surfaceLow};}
+        ::-webkit-scrollbar-thumb{background:${MD.outlineVar};border-radius:3px;}
+        ::-webkit-scrollbar-thumb:hover{background:${MD.outline};}
         input,textarea,select{font-family:inherit;outline:none;}
         button{font-family:inherit;}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.35}}
         /* ── Mobile ── */
         @media(max-width:768px){
           .eg-sidebar{
-            position:fixed!important;top:0;left:0;bottom:0;
             transform:translateX(-100%);
-            transition:transform 0.25s ease;
+            transition:transform 0.2s cubic-bezier(0.2,0,0,1);
             z-index:200!important;
-            width:260px!important;
           }
           .eg-sidebar.open{transform:translateX(0)!important;}
           .eg-overlay{
-            display:none;position:fixed;inset:0;background:#00000080;z-index:199;
+            display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:199;
           }
           .eg-overlay.open{display:block;}
-          .eg-main{margin-left:0!important;padding:14px!important;}
+          .eg-main{margin-left:0!important;padding:16px!important;}
           .eg-topbar{left:0!important;}
+          .eg-top-header{padding-left:56px!important;}
           .eg-hamburger{display:flex!important;}
-          .eg-kpi-grid{grid-template-columns:repeat(3,1fr)!important;}
+          .eg-kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
           .eg-chart-row{grid-template-columns:1fr!important;}
           .eg-top5-grid{grid-template-columns:1fr!important;}
           .eg-sev-domain{grid-template-columns:1fr!important;}
@@ -1734,106 +1985,72 @@ export default function App() {
       {/* Mobile overlay */}
       <div className={`eg-overlay${mobileOpen?" open":""}`} onClick={()=>setMobileOpen(false)}/>
 
-      {/* Sidebar */}
+      {/* Sidebar — Nav renders its own full-height <aside>; this wrapper only
+          carries the mobile slide-in class + z-index, no duplicate styling */}
       <div className={`eg-sidebar${mobileOpen?" open":""}`}
-        style={{position:"fixed",top:0,left:0,bottom:0,width:216,
-          background:"#1a2332",borderRight:"1px solid #2d3748",
-          display:"flex",flexDirection:"column",zIndex:100}}>
+        style={{position:"fixed",top:0,left:0,bottom:0,zIndex:100}}>
         <Nav view={view} setView={(v)=>{setView(v);setMobileOpen(false);}} fails={fail.length}
           user={authUser} onLogout={handleLogout}/>
       </div>
 
-      {/* Topbar */}
-      <div className="eg-topbar" style={{position:"fixed",top:0,left:216,right:0,height:52,
-        background:"#1a2332",borderBottom:"1px solid #2d3748",
-        display:"flex",alignItems:"center",padding:"0 16px",gap:12,zIndex:90}}>
-        {/* Hamburger */}
-        <button className="eg-hamburger" onClick={()=>setMobileOpen(o=>!o)}
-          style={{background:"none",border:"none",color:"#8896aa",cursor:"pointer",
-            padding:"6px",display:"none",flexDirection:"column",gap:4}}>
-          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
-          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
-          <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
-        </button>
-
-        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-          <span style={{width:7,height:7,borderRadius:"50%",background:online?"#34d399":"#f87171",
-            boxShadow:`0 0 8px ${online?"#34d399":"#f87171"}`,flexShrink:0}}/>
-          <span style={{fontSize:11,color:"#4a5568",fontFamily:"monospace",display:online?"block":"none"}} className="eg-hide-sm">
-            {online?"ONLINE":"OFFLINE"}
-          </span>
-          {targets[0]&&<>
-            <span style={{color:"#2d3748",fontSize:14}}>/</span>
-            <span style={{fontSize:12,color:"#8896aa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {targets[0].name}
-            </span>
-          </>}
-          {last&&<span style={{fontSize:10,color:"#374458",marginLeft:4,flexShrink:0,
-            display:"none"}} className="eg-hide-sm">
-            {new Date(last).toLocaleString()}
-          </span>}
+      {/* Topbar — single source of truth (Top component), with hamburger
+          injected for mobile via a small wrapper so Top itself stays
+          desktop/mobile agnostic */}
+      <div className="eg-topbar" style={{position:"fixed",top:0,left:232,right:0,zIndex:90}}>
+        <div style={{position:"relative"}}>
+          <button className="eg-hamburger" onClick={()=>setMobileOpen(o=>!o)}
+            style={{position:"absolute",left:16,top:0,bottom:0,margin:"auto 0",height:32,
+              background:"none",border:"none",color:MD.onSurfaceVar,cursor:"pointer",
+              padding:"6px",display:"none",flexDirection:"column",justifyContent:"center",gap:4,zIndex:1}}>
+            <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
+          </button>
+          <Top target={targets[0]} scanning={scanning} onScan={scan} online={online} lastScan={last} crits={crit}/>
         </div>
-
-        {crit>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",
-          background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,flexShrink:0}}>
-          <span style={{width:5,height:5,borderRadius:"50%",background:"#f87171",animation:"blink 1.2s ease infinite"}}/>
-          <span style={{fontSize:10,color:"#f87171",fontWeight:700,fontFamily:"monospace",whiteSpace:"nowrap"}}>{crit} CRIT</span>
-        </div>}
-
-        <button onClick={scan} disabled={scanning}
-          style={{padding:"7px 14px",borderRadius:5,border:"none",cursor:"pointer",flexShrink:0,
-            background:scanning?"transparent":"linear-gradient(135deg,#0ea5e9,#6366f1)",
-            color:scanning?"#38bdf8":"#fff",outline:scanning?"1px solid #38bdf8":"none",
-            fontSize:11,fontWeight:700,letterSpacing:"0.06em",
-            display:"flex",alignItems:"center",gap:6,transition:"all 0.2s"}}>
-          {scanning?<><div style={{width:10,height:10,border:"2px solid #38bdf8",
-            borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
-            <span className="eg-hide-sm">SCANNING</span></>
-          :<>▶ <span className="eg-hide-sm">SCAN</span></>}
-        </button>
       </div>
 
       {/* Main content */}
-      <main className="eg-main" style={{marginLeft:216,marginTop:52,padding:20,
-        minHeight:"calc(100vh - 52px)",display:"flex",flexDirection:"column"}}>
+      <main className="eg-main" style={{marginLeft:232,marginTop:64,padding:24,
+        minHeight:"calc(100vh - 64px)",display:"flex",flexDirection:"column"}}>
         <div style={{flex:1}}>{VIEWS[view]||VIEWS.dashboard}</div>
         {/* Footer */}
-        <footer style={{marginTop:40,paddingTop:20,borderTop:"1px solid #1e293b",
+        <footer style={{marginTop:48,paddingTop:24,borderTop:`1px solid ${MD.outlineVar}`,
           display:"flex",alignItems:"center",justifyContent:"space-between",
-          flexWrap:"wrap",gap:12}}>
+          flexWrap:"wrap",gap:14}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:22,height:22,borderRadius:5,
-                background:"linear-gradient(135deg,#0ea5e9,#6366f1)",
+            <div style={{display:"flex",alignItems:"center",gap:9}}>
+              <div style={{width:24,height:24,borderRadius:MD.radiusSm,
+                background:MD.primaryContainer,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:9,fontWeight:800,color:"#fff"}}>EG</div>
-              <span style={{fontSize:11,fontWeight:600,color:"#4a5568"}}>EntraGuard v2.0</span>
+                ...TYPE.labelMd,color:MD.onPrimaryContainer}}>EG</div>
+              <span style={{...TYPE.labelLg,color:MD.outline,fontWeight:600}}>EntraGuard v2.0</span>
             </div>
-            <span style={{fontSize:10,color:"#2d3748"}}>|</span>
-            <span style={{fontSize:10,color:"#374458"}}>Azure Identity Security Posture Management</span>
+            <span style={{color:MD.outlineVar}}>|</span>
+            <span style={{...TYPE.bodySm,color:MD.outline}}>Azure Identity Security Posture Management</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
             {[
               ["GitHub","https://github.com/jahmed-cloud/entra-guard"],
               ["Docker Hub","https://hub.docker.com/r/jahmed22/entra-guard-api"],
               ["Docs","https://github.com/jahmed-cloud/entra-guard#readme"],
-              ["Report Issue","https://github.com/jahmed-cloud/entra-guard/issues"],
+              ["Report issue","https://github.com/jahmed-cloud/entra-guard/issues"],
               ["Microsoft Graph","https://learn.microsoft.com/en-us/graph/overview"],
             ].map(([l,u])=>(
-              <a key={l} href={u} target="_blank" style={{fontSize:10,color:"#374458",
+              <a key={l} href={u} target="_blank" style={{...TYPE.bodySm,color:MD.outline,
                 textDecoration:"none",transition:"color 0.15s"}}
-                onMouseOver={e=>e.target.style.color="#38bdf8"}
-                onMouseOut={e=>e.target.style.color="#374458"}>{l}</a>
+                onMouseOver={e=>e.target.style.color=MD.primary}
+                onMouseOut={e=>e.target.style.color=MD.outline}>{l}</a>
             ))}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:10,color:"#2d3748"}}>Built by</span>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{...TYPE.bodySm,color:MD.outlineVar}}>Built by</span>
             <a href="mailto:iam@jahmed.cloud"
-              style={{fontSize:10,color:"#374458",textDecoration:"none"}}
-              onMouseOver={e=>e.target.style.color="#38bdf8"}
-              onMouseOut={e=>e.target.style.color="#374458"}>Junaid Ahmed</a>
-            <span style={{fontSize:10,color:"#2d3748"}}>·</span>
-            <span style={{fontSize:10,color:"#2d3748"}}>MIT License</span>
+              style={{...TYPE.bodySm,color:MD.outline,textDecoration:"none"}}
+              onMouseOver={e=>e.target.style.color=MD.primary}
+              onMouseOut={e=>e.target.style.color=MD.outline}>Junaid Ahmed</a>
+            <span style={{color:MD.outlineVar}}>·</span>
+            <span style={{...TYPE.bodySm,color:MD.outlineVar}}>MIT License</span>
           </div>
         </footer>
       </main>

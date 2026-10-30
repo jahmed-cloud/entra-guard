@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.core.database import get_db
 from app.models.models import Finding, ScanRun
+from app.auth.router import require_auth
+from app.routers.targets import parse_uuid
 
 router = APIRouter()
 
@@ -13,8 +15,13 @@ async def list_findings(
     status: str = None,
     page: int = 1,
     page_size: int = 500,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_auth),
 ):
+    target_id = parse_uuid(target_id) if target_id else None
+    scan_run_id = parse_uuid(scan_run_id, "Run") if scan_run_id else None
+    page, page_size = max(page, 1), min(max(page_size, 1), 1000)
+
     # If no scan_run_id specified, automatically use the latest completed run
     if not scan_run_id:
         run_q = select(ScanRun).where(ScanRun.status == "completed")
@@ -24,7 +31,7 @@ async def list_findings(
         run_result = await db.execute(run_q)
         latest_run = run_result.scalar_one_or_none()
         if latest_run:
-            scan_run_id = str(latest_run.id)
+            scan_run_id = latest_run.id
 
     q = select(Finding)
     if target_id:
@@ -52,6 +59,10 @@ async def list_findings(
             "risk_description": f.risk_description,
             "remediation_steps": f.remediation_steps,
             "estimated_effort": f.estimated_effort,
+            "ai_explanation": f.ai_explanation,
+            "ai_false_positive_likelihood": f.ai_false_positive_likelihood,
+            "ai_false_positive_reason": f.ai_false_positive_reason,
+            "ai_queries_made": f.ai_queries_made,
             "first_seen_at": f.first_seen_at.isoformat() if f.first_seen_at else None,
             "last_seen_at": f.last_seen_at.isoformat() if f.last_seen_at else None,
         }
