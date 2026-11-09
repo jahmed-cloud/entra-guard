@@ -17,6 +17,8 @@ Self-hosted Entra ID (Azure AD) security posture scanner. Docker Compose stack:
 - Each check returns `{check_id, severity, status, score, affected_resources, evidence, risk_description, remediation_steps, estimated_effort}` and must catch its own Graph errors. `check_id`s must be unique — `tests/test_checks.py` enforces it.
 - Graph advanced queries (`$count`, `NOT` filters) need `headers={"ConsistencyLevel": "eventual"}` on `GraphClient.get`/`get_all_pages`.
 - User-facing release notes go in `UPGRADE-NOTES.md`; breaking changes get a "what you might notice" row.
+- Maintainer links (website, GitHub, email) and the donate link live in the `AUTHOR` / `DONATE_URL` constants near the top of `App.tsx` — the About page, sidebar Sponsor button and footer all read from them. `.github/FUNDING.yml` drives the repo's Sponsor button.
+- The mobile sidebar wrapper (`.eg-sidebar`) must keep `width:232` to match `Nav`, or the slide-out transform moves 0px and the menu never hides.
 
 ## Verifying changes
 

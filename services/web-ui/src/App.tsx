@@ -196,6 +196,91 @@ const ScoreBar = ({score, max=10}) => {
   );
 };
 
+// ─── Author & support ─────────────────────────────────────────────────────────
+// Single place for the maintainer's links. DONATE_URL is GitHub Sponsors —
+// it only resolves once the jahmed-cloud account is enrolled in Sponsors;
+// swap it for a Buy Me a Coffee / Ko-fi link if you use one of those instead.
+const AUTHOR = {
+  name:    "Junaid Ahmed",
+  website: "https://jahmed.cloud",
+  github:  "https://github.com/jahmed-cloud",
+  email:   "iam@jahmed.cloud",
+  bio:     "",  // optional one-liner shown on the About page; hidden when empty
+};
+const REPO_URL   = "https://github.com/jahmed-cloud/entra-guard";
+const DONATE_URL = "https://github.com/sponsors/jahmed-cloud";
+const SPONSOR = { tone:"#FFB1C8", container:"#5C1A3A" };
+
+function SponsorButton({full=false}) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <a href={DONATE_URL} target="_blank" rel="noopener noreferrer"
+      onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+      style={{display:full?"flex":"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
+        padding:"8px 16px",borderRadius:MD.radiusXl,textDecoration:"none",
+        background: hover ? stateLayer(SPONSOR.tone, 0.22) : SPONSOR.container,
+        color:SPONSOR.tone,...TYPE.labelLg,fontWeight:700,transition:"background 0.15s"}}>
+      <span aria-hidden="true">♥</span> Sponsor
+    </a>
+  );
+}
+
+function About() {
+  const card = {background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd,padding:"20px 22px"};
+  const link = {color:MD.primary,textDecoration:"none"};
+  const ext = {target:"_blank", rel:"noopener noreferrer"};
+  return (
+    <div style={{animation:"fadeIn 0.25s cubic-bezier(0.2,0,0,1)",maxWidth:760,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={card}>
+        <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:8}}>About EntraGuard</div>
+        <div style={{...TYPE.titleLg,color:MD.onSurface,marginBottom:8}}>Azure identity security posture management</div>
+        <p style={{...TYPE.bodyLg,color:MD.onSurfaceVar,margin:0}}>
+          EntraGuard is a free, open-source, self-hosted scanner that checks your Microsoft Entra ID
+          tenant against identity security best practices and tells you how to fix what it finds.
+          It runs on your own infrastructure, so your tenant data stays with you.
+        </p>
+        <div style={{display:"flex",gap:16,marginTop:14,flexWrap:"wrap",...TYPE.bodyMd}}>
+          <a href={REPO_URL} {...ext} style={link}>Source on GitHub</a>
+          <a href={`${REPO_URL}#readme`} {...ext} style={link}>Documentation</a>
+          <a href={`${REPO_URL}/issues`} {...ext} style={link}>Report an issue</a>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:12}}>About the author</div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:48,height:48,borderRadius:"50%",background:MD.primaryContainer,flexShrink:0,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            ...TYPE.titleMd,color:MD.onPrimaryContainer}}>JA</div>
+          <div style={{minWidth:0}}>
+            <div style={{...TYPE.titleMd,color:MD.onSurface}}>{AUTHOR.name}</div>
+            <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar}}>Creator and maintainer of EntraGuard</div>
+          </div>
+        </div>
+        {AUTHOR.bio && <p style={{...TYPE.bodyLg,color:MD.onSurfaceVar,margin:"14px 0 0"}}>{AUTHOR.bio}</p>}
+        <div style={{display:"flex",gap:16,marginTop:14,flexWrap:"wrap",...TYPE.bodyMd}}>
+          <a href={AUTHOR.website} {...ext} style={link}>jahmed.cloud</a>
+          <a href={AUTHOR.github} {...ext} style={link}>GitHub</a>
+          <a href={`mailto:${AUTHOR.email}`} style={link}>{AUTHOR.email}</a>
+        </div>
+      </div>
+
+      <div style={{...card,background:SPONSOR.container+"55"}}>
+        <div style={{...TYPE.labelSm,color:SPONSOR.tone,marginBottom:8}}>Support the project</div>
+        <p style={{...TYPE.bodyLg,color:MD.onSurfaceVar,margin:"0 0 14px"}}>
+          EntraGuard is free and always will be. If it saves you time or helps secure your tenant,
+          sponsoring helps fund new checks and maintenance. Starring the repository helps too.
+        </p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <SponsorButton/>
+          <a href={REPO_URL} {...ext} style={{...TYPE.labelLg,color:MD.onSurfaceVar,textDecoration:"none",
+            padding:"8px 16px",border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusXl}}>★ Star on GitHub</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAVS = [
   {id:"dashboard",  icon:"◈", l:"Dashboard"},
@@ -205,6 +290,7 @@ const NAVS = [
   {id:"history",    icon:"◷", l:"Scan History"},
   {id:"exceptions", icon:"⊘", l:"Exceptions"},
   {id:"users",      icon:"👤", l:"Users", adminOnly:true},
+  {id:"about",      icon:"ℹ", l:"About"},
 ];
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -423,6 +509,8 @@ function Nav({view, setView, fails, user, onLogout}) {
         })}
       </nav>
 
+      <div style={{padding:"0 20px 14px"}}><SponsorButton full/></div>
+
       {/* Footer */}
       <div style={{padding:"16px 20px",borderTop:`1px solid ${MD.outlineVar}`}}>
         {user && user.auth_type !== "disabled" ? (<>
@@ -439,9 +527,9 @@ function Nav({view, setView, fails, user, onLogout}) {
         </>) : (<>
           <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:5}}>Operator</div>
           <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:600}}>Junaid Ahmed</div>
-          <div style={{...TYPE.bodySm,color:MD.outline}}>iam@jahmed.cloud</div>
+          <div style={{...TYPE.bodySm,color:MD.outline}}>{AUTHOR.email}</div>
           <div style={{display:"flex",gap:8,marginTop:10}}>
-            {[["GH","https://github.com/jahmed-cloud/entra-guard"],["DH","https://hub.docker.com/r/jahmed22/entra-guard"]].map(([l,u])=>(
+            {[["Web",AUTHOR.website],["GH",REPO_URL],["DH","https://hub.docker.com/r/jahmed22/entra-guard"]].map(([l,u])=>(
               <a key={l} href={u} target="_blank" style={{...TYPE.labelMd,color:MD.outline,
                 textDecoration:"none",padding:"3px 8px",border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusSm}}>{l}</a>
             ))}
@@ -1920,6 +2008,7 @@ export default function App() {
     history:<History runs={runs}/>,
     exceptions:<Exceptions findings={findings}/>,
     users:<Users authUser={authUser}/>,
+    about:<About/>,
   };
 
   // Loading
@@ -1967,7 +2056,7 @@ export default function App() {
           .eg-overlay.open{display:block;}
           .eg-main{margin-left:0!important;padding:16px!important;}
           .eg-topbar{left:0!important;}
-          .eg-top-header{padding-left:56px!important;}
+          .eg-top-header{left:0!important;padding-left:56px!important;}
           .eg-hamburger{display:flex!important;}
           .eg-kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
           .eg-chart-row{grid-template-columns:1fr!important;}
@@ -1987,8 +2076,10 @@ export default function App() {
 
       {/* Sidebar — Nav renders its own full-height <aside>; this wrapper only
           carries the mobile slide-in class + z-index, no duplicate styling */}
+      {/* width must match Nav's 232px: the mobile translateX(-100%) is relative
+          to this wrapper, and with no width it moved 0px and never hid the menu */}
       <div className={`eg-sidebar${mobileOpen?" open":""}`}
-        style={{position:"fixed",top:0,left:0,bottom:0,zIndex:100}}>
+        style={{position:"fixed",top:0,left:0,bottom:0,width:232,zIndex:100}}>
         <Nav view={view} setView={(v)=>{setView(v);setMobileOpen(false);}} fails={fail.length}
           user={authUser} onLogout={handleLogout}/>
       </div>
@@ -1997,11 +2088,13 @@ export default function App() {
           injected for mobile via a small wrapper so Top itself stays
           desktop/mobile agnostic */}
       <div className="eg-topbar" style={{position:"fixed",top:0,left:232,right:0,zIndex:90}}>
-        <div style={{position:"relative"}}>
-          <button className="eg-hamburger" onClick={()=>setMobileOpen(o=>!o)}
+        {/* height:64 = header height, so the hamburger's margin:auto centres
+            it in the bar; zIndex keeps it above the fixed header (z 90) */}
+        <div style={{position:"relative",height:64}}>
+          <button className="eg-hamburger" aria-label="Open menu" onClick={()=>setMobileOpen(o=>!o)}
             style={{position:"absolute",left:16,top:0,bottom:0,margin:"auto 0",height:32,
               background:"none",border:"none",color:MD.onSurfaceVar,cursor:"pointer",
-              padding:"6px",display:"none",flexDirection:"column",justifyContent:"center",gap:4,zIndex:1}}>
+              padding:"6px",display:"none",flexDirection:"column",justifyContent:"center",gap:4,zIndex:95}}>
             <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
             <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
             <div style={{width:18,height:2,background:"currentColor",borderRadius:1}}/>
@@ -2031,7 +2124,8 @@ export default function App() {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
             {[
-              ["GitHub","https://github.com/jahmed-cloud/entra-guard"],
+              ["GitHub",REPO_URL],
+              ["Sponsor",DONATE_URL],
               ["Docker Hub","https://hub.docker.com/r/jahmed22/entra-guard-api"],
               ["Docs","https://github.com/jahmed-cloud/entra-guard#readme"],
               ["Report issue","https://github.com/jahmed-cloud/entra-guard/issues"],
@@ -2045,10 +2139,10 @@ export default function App() {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <span style={{...TYPE.bodySm,color:MD.outlineVar}}>Built by</span>
-            <a href="mailto:iam@jahmed.cloud"
+            <a href={AUTHOR.website} target="_blank" rel="noopener noreferrer"
               style={{...TYPE.bodySm,color:MD.outline,textDecoration:"none"}}
               onMouseOver={e=>e.target.style.color=MD.primary}
-              onMouseOut={e=>e.target.style.color=MD.outline}>Junaid Ahmed</a>
+              onMouseOut={e=>e.target.style.color=MD.outline}>{AUTHOR.name} · jahmed.cloud</a>
             <span style={{color:MD.outlineVar}}>·</span>
             <span style={{...TYPE.bodySm,color:MD.outlineVar}}>MIT License</span>
           </div>
