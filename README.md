@@ -28,6 +28,7 @@
 - [FAQ](#faq)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
+- [Support the Project](#support-the-project)
 - [License](#license)
 
 ---
@@ -967,8 +968,18 @@ Quick summary:
 
 ---
 
+## Support the Project
+
+EntraGuard is free and open source. If it helps you, you can support its development:
+
+- **Sponsor** via [GitHub Sponsors](https://github.com/sponsors/jahmed-cloud) (also the ♥ Sponsor button in the dashboard sidebar and on the About page)
+- **Star** the repository — it helps other people find it
+- **Contribute** checks, fixes or remediation text (see [CONTRIBUTING.md](CONTRIBUTING.md))
+
+---
+
 ## License
 
 EntraGuard is released under the [MIT License](LICENSE).
 
-Built by **Junaid Ahmed** — [iam@jahmed.cloud](mailto:iam@jahmed.cloud)
+Built by **Junaid Ahmed** — [jahmed.cloud](https://jahmed.cloud) · [iam@jahmed.cloud](mailto:iam@jahmed.cloud)
