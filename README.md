@@ -153,170 +153,31 @@ Every finding includes a **plain-English risk description**, **numbered step-by-
 mkdir entra-guard && cd entra-guard
 ```
 
-### 2. Create `docker-compose.yml`
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: entra-guard-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cspm}
-      POSTGRES_USER: ${POSTGRES_USER:-cspm_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cspm_user}"]
-      interval: 5s
-      retries: 10
-    networks: [internal]
-
-  redis:
-    image: redis:7-alpine
-    container_name: entra-guard-redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      retries: 10
-    networks: [internal]
-
-  api:
-    image: jahmed22/entra-guard-api:latest
-    platform: linux/amd64
-    container_name: entra-guard-api
-    restart: unless-stopped
-    ports:
-      - "${API_PORT:-8000}:8000"
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-      # Auth settings — must be declared here explicitly to be visible in container
-      AUTH_ENABLED: ${AUTH_ENABLED:-true}
-      LOCAL_ADMIN_USERNAME: ${LOCAL_ADMIN_USERNAME}
-      LOCAL_ADMIN_PASSWORD: ${LOCAL_ADMIN_PASSWORD}
-      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-8}
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
-      # Notifications
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      ALERT_EMAIL: ${ALERT_EMAIL}
-      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL}
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
-      # Break glass
-      BREAK_GLASS_GROUP_ID: ${BREAK_GLASS_GROUP_ID}
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
-    networks: [internal, external]
-
-  worker:
-    image: jahmed22/entra-guard-worker:latest
-    platform: linux/amd64
-    container_name: entra-guard-worker
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-      BREAK_GLASS_GROUP_ID: ${BREAK_GLASS_GROUP_ID}
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
-    networks: [internal, external]
-
-  scheduler:
-    image: jahmed22/entra-guard-scheduler:latest
-    platform: linux/amd64
-    container_name: entra-guard-scheduler
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
-    networks: [internal, external]
-
-  ui:
-    image: jahmed22/entra-guard-ui:latest
-    platform: linux/amd64
-    container_name: entra-guard-ui
-    restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:80"
-    depends_on: [api]
-    networks: [internal, external]
-
-networks:
-  internal:
-    driver: bridge
-    internal: true
-  external:
-    driver: bridge
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-> **Important:** Environment variables from `.env` are **not** automatically visible inside containers. Any variable the API needs at runtime must be explicitly declared in the `environment:` block of its service, as shown above. This is a common source of auth and notification failures.
-
-### 3. Create `.env`
+### 2. Download `docker-compose.yml` and `.env`
 
 ```bash
-# ── Required ──────────────────────────────────────────────────
-POSTGRES_PASSWORD=your_strong_password_here
-SECRET_KEY=your_secret_key_here          # openssl rand -hex 32
+curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/jahmed-cloud/entra-guard/main/docker-compose.example.yml
+curl -fsSLo .env https://raw.githubusercontent.com/jahmed-cloud/entra-guard/main/.env.example
+```
 
-# ── Azure / Entra ID credentials ──────────────────────────────
+[`docker-compose.example.yml`](docker-compose.example.yml) runs the published Docker Hub images. It works on amd64 and arm64 (Raspberry Pi, Apple Silicon) without changes, keeps local users in a volume across upgrades, and binds the API port to `127.0.0.1` only (the dashboard reaches the API through the UI container).
+
+### 3. Edit `.env`
+
+At minimum set:
+
+```bash
+POSTGRES_PASSWORD=a-strong-password
+SECRET_KEY=...                    # openssl rand -hex 32  (required when AUTH_ENABLED=true)
 AZURE_TENANT_ID=your-tenant-id
 AZURE_CLIENT_ID=your-client-id
 AZURE_CLIENT_SECRET=your-client-secret
-
-# ── Display ───────────────────────────────────────────────────
-TARGET_NAME=My Azure Tenant
-PORT=3000
-API_PORT=8000
-
-# ── Database ──────────────────────────────────────────────────
-POSTGRES_DB=cspm
-POSTGRES_USER=cspm_user
-
-# ── Authentication ────────────────────────────────────────────
 AUTH_ENABLED=true
-LOCAL_ADMIN_USERNAME=admin
-LOCAL_ADMIN_PASSWORD=your_admin_password
-JWT_EXPIRE_HOURS=8
-APP_BASE_URL=http://your-server-ip:3000  # Used for SSO redirect URIs
-
-# ── Email alerts (optional) ───────────────────────────────────
-# SMTP_HOST=mail.yourdomain.com
-# SMTP_PORT=587
-# SMTP_USER=alerts@yourdomain.com
-# SMTP_PASSWORD=your_smtp_password
-# ALERT_EMAIL=security@yourdomain.com
-
-# ── Slack / Teams notifications (optional) ────────────────────
-# TEAMS_WEBHOOK_URL=https://...
-# SLACK_WEBHOOK_URL=https://hooks.slack.com/...
-
-# ── Break glass monitoring (optional) ────────────────────────
-# BREAK_GLASS_GROUP_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+LOCAL_ADMIN_PASSWORD=your-admin-password
+APP_BASE_URL=http://your-server-ip:3000
 ```
+
+Every variable is documented in [`.env.example`](.env.example). Set `EG_VERSION=v2.4.0` to pin an image version instead of `latest`.
 
 ### 4. Pull and start
 
@@ -338,10 +199,10 @@ Navigate to **http://localhost:3000**, log in with your `LOCAL_ADMIN_USERNAME` /
 
 | Image | Tags | Size |
 |-------|------|------|
-| `jahmed22/entra-guard-api` | `latest`, `v2.1` | ~600 MB |
-| `jahmed22/entra-guard-ui` | `latest`, `v2.1` | ~50 MB |
-| `jahmed22/entra-guard-worker` | `latest`, `v2.1` | ~530 MB |
-| `jahmed22/entra-guard-scheduler` | `latest`, `v2.1` | ~530 MB |
+| `jahmed22/entra-guard-api` | `latest`, `v2.4.0` | ~600 MB |
+| `jahmed22/entra-guard-ui` | `latest`, `v2.4.0` | ~50 MB |
+| `jahmed22/entra-guard-worker` | `latest`, `v2.4.0` | ~530 MB |
+| `jahmed22/entra-guard-scheduler` | `latest`, `v2.4.0` | ~530 MB |
 
 All images are multi-arch: **linux/amd64** and **linux/arm64** (Raspberry Pi 4/5, Apple Silicon, DietPi).
 
@@ -374,14 +235,18 @@ docker compose up -d
 
 ### Multi-arch build (for maintainers)
 
-Images are built from an ARM64 host (DietPi) using `docker buildx` to produce manifests for both `linux/amd64` and `linux/arm64`:
+Each image has its own Dockerfile. Build and push all four as multi-arch manifests (`linux/amd64` + `linux/arm64`) with `docker buildx`:
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t jahmed22/entra-guard-api:latest --push .
+VERSION=v2.4.0
+for pair in api:Dockerfile.api worker:Dockerfile.engine scheduler:Dockerfile.scheduler ui:Dockerfile.web; do
+  name=${pair%%:*}; file=${pair#*:}
+  docker buildx build --platform linux/amd64,linux/arm64 -f "$file" \
+    -t "jahmed22/entra-guard-$name:$VERSION" -t "jahmed22/entra-guard-$name:latest" --push .
+done
 ```
 
-If you deploy to an AMD64 server and see platform mismatch warnings, add `platform: linux/amd64` under each service in `docker-compose.yml`.
+The scheduler must be built from `Dockerfile.scheduler` (Celery beat). Images up to `v2.3.1` built it from the worker Dockerfile, so the daily scan never ran; `docker-compose.example.yml` sets the scheduler `command:` explicitly to cover those older tags.
 
 ---
 
@@ -895,9 +760,9 @@ DELETE FROM findings WHERE scan_run_id NOT IN (
 DELETE FROM scan_runs WHERE status != 'completed';"
 ```
 
-### Platform mismatch warnings on AMD64 servers
+### Platform mismatch warnings
 
-Add `platform: linux/amd64` under every `jahmed22/entra-guard-*` service in `docker-compose.yml`, then:
+The images are multi-arch, so Docker normally picks the right one. If you see platform mismatch warnings, your `docker-compose.yml` probably still has `platform: linux/amd64` lines from an older README. Remove them (or switch to [`docker-compose.example.yml`](docker-compose.example.yml)), then:
 
 ```bash
 docker compose down

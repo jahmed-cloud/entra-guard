@@ -221,3 +221,23 @@ release) now lives in `auth/router.py` and is shared by every router.
 - `docker-compose.yml` publishes the API on `:8000` directly, bypassing nginx. If clients reach it through Docker's userland proxy, their peer address is a private gateway IP and `X-Real-IP` would be trusted. Remove the `8000:8000` mapping in production if you don't need direct API access.
 - Exceptions and "fixed" markers in the UI are stored in browser `localStorage` only, not shared between users.
 - README links to a `LICENSE` file that isn't in the repository.
+
+---
+
+## 10. Docker Hub images v2.4.0 and `docker-compose.example.yml`
+
+The images on Docker Hub (`jahmed22/entra-guard-{api,worker,scheduler,ui}`) are now published as `v2.4.0` and `latest`, built for `linux/amd64` and `linux/arm64`. They include everything in §8–9 above, so read the breaking-change table in §9 before pulling `latest`. In particular, set a real `SECRET_KEY` if `AUTH_ENABLED=true`.
+
+**Fixed: scheduled scans never ran from Docker Hub images.** Up to `v2.3.1`, the scheduler image was built from the worker Dockerfile, so the `scheduler` container ran a second Celery worker instead of Celery beat, and the daily scan was never triggered. It now has its own `Dockerfile.scheduler`.
+
+**Fixed: fresh builds couldn't run scans.** `celery==5.4.0` only bounds `kombu` to `<6`, so a build today pulls kombu 5.7.0, which refuses to work with the pinned `redis==5.0.4`. The worker crash-looped and the API returned `Failed to queue scan`. `kombu==5.4.2` is now pinned in both services, and a test (`tests/test_dependencies.py`) fails CI if the pair ever becomes incompatible again. If you build from source, rebuild with `docker compose build --no-cache`.
+
+**New `docker-compose.example.yml`** for running from the published images (the README's Quick Start downloads it). Compared with the compose file previously shown in the README:
+
+| Change | What you might notice |
+|---|---|
+| No `platform: linux/amd64` lines | ARM hosts (Raspberry Pi, Apple Silicon) now get native images instead of emulated amd64 ones. |
+| Scheduler has an explicit `beat` command | Daily scans start running, even if you stay on an older image tag. |
+| API port bound to `127.0.0.1` | `curl localhost:8000` on the server still works; other machines can no longer reach the API directly (the dashboard is unaffected). Change the port mapping if you relied on remote API access. |
+| New `users_data` volume on the API | Local users created on the Users page now survive container recreation. If you were using the old README compose, users you created there were only in the container and will need to be recreated once. |
+| `EG_VERSION` in `.env` | Pin a release (e.g. `EG_VERSION=v2.4.0`) instead of tracking `latest`. |
