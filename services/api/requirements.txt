@@ -4,6 +4,9 @@ sqlalchemy==2.0.30
 asyncpg==0.29.0
 alembic==1.13.1
 celery==5.4.0
+# Pinned: celery only bounds kombu to <6, and newer kombu (e.g. 5.7.0) needs redis-py>=6.1,
+# which breaks the redis==5.0.4 pin below (worker crash-loops on startup).
+kombu==5.4.2
 redis==5.0.4
 psycopg2-binary==2.9.9
 pydantic==2.7.1

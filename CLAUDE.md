@@ -30,6 +30,10 @@ Self-hosted Entra ID (Azure AD) security posture scanner. Docker Compose stack:
 
 CI runs the same in `.github/workflows/ci.yml`. A full stack check needs Docker Desktop running: `docker compose up -d --build`.
 
+## Releasing images
+
+Four images on Docker Hub (`jahmed22/entra-guard-{api,worker,scheduler,ui}`), one Dockerfile each: `Dockerfile.api`, `Dockerfile.engine` (worker), `Dockerfile.scheduler` (Celery beat — never build the scheduler from the worker Dockerfile), `Dockerfile.web`. Build multi-arch (`linux/amd64,linux/arm64`) with `docker buildx` and tag both the version and `latest`; the exact loop is in README → Multi-arch build. `docker-compose.yml` builds from source; `docker-compose.example.yml` runs the published images and is what the README Quick Start downloads. Before pushing, smoke-test the example compose with locally built images (`EG_VERSION=<tag>`).
+
 ## Open work (plan)
 
 1. Redis-backed login rate limiter (current one is per-process; API runs 2 workers).

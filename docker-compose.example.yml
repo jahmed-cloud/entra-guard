@@ -1,0 +1,127 @@
+# ============================================================================
+# EntraGuard — run from the published Docker Hub images (no source needed)
+#
+#   mkdir entra-guard && cd entra-guard
+#   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/jahmed-cloud/entra-guard/main/docker-compose.example.yml
+#   curl -fsSLo .env https://raw.githubusercontent.com/jahmed-cloud/entra-guard/main/.env.example
+#   nano .env                 # fill in the Required section at least
+#   docker compose up -d
+#
+# Images are multi-arch (linux/amd64 + linux/arm64) — Docker picks the right
+# one automatically, so no `platform:` line is needed (Raspberry Pi and Apple
+# Silicon included). Pin a version with EG_VERSION=v2.4.0 in .env.
+#
+# Every service reads .env via env_file; the environment: blocks below only
+# set the internal connection strings, which you shouldn't need to change.
+# ============================================================================
+
+x-engine-env: &engine-env
+  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: entra-guard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cspm}
+      POSTGRES_USER: ${POSTGRES_USER:-cspm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cspm_user} -d ${POSTGRES_DB:-cspm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    container_name: entra-guard-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  api:
+    image: jahmed22/entra-guard-api:${EG_VERSION:-latest}
+    container_name: entra-guard-api
+    restart: unless-stopped
+    # The dashboard reaches the API through the ui container, so this port is
+    # only for scripts/curl on the host itself. It's bound to localhost on
+    # purpose; change to "${API_PORT:-8000}:8000" only if you need remote
+    # API access, ideally behind a firewall.
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - users_data:/app/data   # local users + instance id — survives upgrades
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    networks: [internal, external]
+
+  worker:
+    image: jahmed22/entra-guard-worker:${EG_VERSION:-latest}
+    container_name: entra-guard-worker
+    restart: unless-stopped
+    env_file: .env
+    environment: *engine-env
+    extra_hosts:
+      # Lets the optional Ollama AI provider reach the host on Linux.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    networks: [internal, external]
+
+  scheduler:
+    image: jahmed22/entra-guard-scheduler:${EG_VERSION:-latest}
+    container_name: entra-guard-scheduler
+    restart: unless-stopped
+    # Explicit so it also works with older scheduler images (<= v2.3.1),
+    # which mistakenly default to the worker command.
+    command: celery -A app.tasks beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    env_file: .env
+    environment: *engine-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    networks: [internal, external]
+
+  ui:
+    image: jahmed22/entra-guard-ui:${EG_VERSION:-latest}
+    container_name: entra-guard-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:80"
+    depends_on: [api]
+    networks: [internal, external]
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  users_data:
