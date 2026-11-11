@@ -196,6 +196,24 @@ const ScoreBar = ({score, max=10}) => {
   );
 };
 
+// Shown in the sidebar, login page and footer. Keep in step with APP_VERSION
+// in services/api/app/auth/tracker.py and the Docker image tag.
+const APP_VERSION = "2.5.0";
+
+// The API answers validation failures (422) with a list of {loc, msg}
+// objects rather than a string; shown raw that rendered as "[object Object]".
+const apiErrorMessage = (d, fallback) => {
+  const detail = d?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map(e => {
+      const field = Array.isArray(e?.loc) ? e.loc.filter(x => x !== "body" && x !== "query").join(".") : "";
+      return field ? `${field}: ${e?.msg}` : e?.msg;
+    }).filter(Boolean).join("; ") || fallback;
+  }
+  return fallback;
+};
+
 // ─── Author & support ─────────────────────────────────────────────────────────
 // Single place for the maintainer's links. DONATE_URL is GitHub Sponsors —
 // it only resolves once the jahmed-cloud account is enrolled in Sponsors;
@@ -337,7 +355,7 @@ function LoginPage({ onLogin, config }) {
         body: JSON.stringify({username:user, password:pass}),
       });
       const d = await r.json();
-      if (!r.ok) { setErr(d.detail || "Invalid credentials"); return; }
+      if (!r.ok) { setErr(apiErrorMessage(d, "Invalid credentials")); return; }
       setStoredToken(d.access_token);
       onLogin(d.user);
     } catch(e) { setErr("Connection failed"); }
@@ -450,7 +468,7 @@ function LoginPage({ onLogin, config }) {
         </div>
 
         <div style={{textAlign:"center",marginTop:18,...TYPE.labelMd,color:MD.outlineVar}}>
-          EntraGuard v2.0 · Read-only · Your data stays on your server
+          EntraGuard v{APP_VERSION} · Read-only · Your data stays on your server
         </div>
       </div>
     </div>
@@ -476,7 +494,7 @@ function Nav({view, setView, fails, user, onLogout}) {
           </div>
           <div>
             <div style={{...TYPE.titleSm,color:MD.onSurface}}>EntraGuard</div>
-            <div style={{...TYPE.labelSm,color:MD.outline,marginTop:1}}>Azure CSPM · v2.0</div>
+            <div style={{...TYPE.labelSm,color:MD.outline,marginTop:1}}>Azure CSPM · v{APP_VERSION}</div>
           </div>
         </div>
       </div>
@@ -592,7 +610,7 @@ function Top({target, scanning, onScan, online, lastScan, crits}) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({findings, runs}) {
+function Dashboard({findings, runs, impact}) {
   const fail=findings.filter(f=>f.status==="failed");
   const pass=findings.filter(f=>f.status==="passed");
   const err=findings.filter(f=>f.status==="error");
@@ -604,6 +622,8 @@ function Dashboard({findings, runs}) {
   const aiExplainedCount=findings.filter(f=>f.ai_explanation).length;
   const aiFlaggedCount=findings.filter(f=>f.ai_false_positive_likelihood&&f.ai_false_positive_likelihood!=="none").length;
   const top5=[...fail].sort((a,b)=>b.score-a.score).slice(0,5);
+  const actions=impact?.top_actions||[];
+  const unverified=impact?.counts?.unverified||0;
   const trendData=runs.slice(0,12).reverse();
 
   const W=480,H=88,PAD=8;
@@ -843,7 +863,52 @@ function Dashboard({findings, runs}) {
 
       {/* Row 4 — Top findings + Coverage rings */}
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,marginBottom:12}} className="eg-top5-grid">
-        {top5.length>0&&(
+        {/* Fix first — ranked by the API (services/api/app/services/impact.py):
+            each check is weighted by severity, and "+N pts" is how far fixing
+            that one finding raises the weighted score. */}
+        {actions.length>0&&(
+          <div style={{...CARD}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:6}}>
+              <div style={{...TYPE.labelSm,color:MD.outline}}>Fix first — biggest impact</div>
+              <div style={{...TYPE.bodySm,color:MD.onSurfaceVar}}>
+                Risk-weighted score <b style={{color:MD.onSurface}}>{impact.weighted_score}</b>
+                {" → "}<b style={{color:SC.Low}}>{impact.potential_score}</b> if you fix {actions.length===1?"this":`these ${actions.length}`}
+              </div>
+            </div>
+            <div style={{...TYPE.bodySm,color:MD.outline,marginBottom:10}}>
+              Weighted by severity, so a Critical gap counts ten times a Low one.
+              {unverified>0&&` ${unverified} check${unverified!==1?"s":""} could not be verified (errors or missing permissions) and ${unverified!==1?"are":"is"} not counted.`}
+            </div>
+            {actions.map((a,i)=>{
+              const r=REM[a.check_id];const sc=sev(a);
+              return (
+                <div key={a.check_id} style={{display:"grid",gridTemplateColumns:"22px 3px 1fr auto",
+                  alignItems:"center",gap:12,padding:"10px 0",
+                  borderBottom:i<actions.length-1?`1px solid ${MD.outlineVar}`:"none"}}>
+                  <div style={{width:22,height:22,borderRadius:MD.radiusSm,background:MD.surfaceHigh,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:10,fontWeight:700,color:MD.outline}}>{i+1}</div>
+                  <div style={{height:38,background:sc,borderRadius:2}}/>
+                  <div style={{minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:1,flexWrap:"wrap"}}>
+                      <span style={{...TYPE.labelMd,color:MD.outline}}>{a.check_id}</span>
+                      {a.quick_win&&<Badge label="Quick win" color={SC.Low} container={SC_CONTAINER.Low} small/>}
+                    </div>
+                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r?.title||a.check_id}</div>
+                    <div style={{...TYPE.bodySm,color:MD.outline,marginTop:1}}>
+                      {a.severity} · {a.effort} effort{a.affected_count>0?` · ${a.affected_count} affected`:""}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right",whiteSpace:"nowrap"}}>
+                    <div style={{...TYPE.titleMd,color:SC.Low}}>+{a.points}</div>
+                    <div style={{...TYPE.labelMd,color:MD.outline}}>pts</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {actions.length===0&&top5.length>0&&(
           <div style={{...CARD}}>
             <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:16}}>Top 5 — highest risk score</div>
             {top5.map((f,i)=>{
@@ -1487,11 +1552,11 @@ function Users({authUser}) {
         if(form.password) body.password=form.password;
         if(form.role!==editUser.role) body.role=form.role;
         const r = await fetch(`/api/v1/users/${editUser.username}`,{method:"PUT",headers,body:JSON.stringify(body)});
-        if(!r.ok){const d=await r.json();throw new Error(d.detail||"Update failed");}
+        if(!r.ok){const d=await r.json().catch(()=>null);throw new Error(apiErrorMessage(d,"Update failed"));}
       } else {
         if(!form.username||!form.name||!form.password) throw new Error("All fields required");
         const r = await fetch("/api/v1/users",{method:"POST",headers,body:JSON.stringify(form)});
-        if(!r.ok){const d=await r.json();throw new Error(d.detail||"Create failed");}
+        if(!r.ok){const d=await r.json().catch(()=>null);throw new Error(apiErrorMessage(d,"Create failed"));}
       }
       setShowForm(false); setMsg(editUser?"User updated":"User created"); load();
       setTimeout(()=>setMsg(""),3000);
@@ -1506,7 +1571,7 @@ function Users({authUser}) {
       const r = await fetch(`/api/v1/users/${username}`,{
         method:"DELETE",headers:token?{"Authorization":"Bearer "+token}:{}
       });
-      if(!r.ok){const d=await r.json();throw new Error(d.detail||"Delete failed");}
+      if(!r.ok){const d=await r.json().catch(()=>null);throw new Error(apiErrorMessage(d,"Delete failed"));}
       setMsg("User deleted"); load(); setTimeout(()=>setMsg(""),3000);
     } catch(e) { setErr(e.message); }
   };
@@ -1519,7 +1584,7 @@ function Users({authUser}) {
         headers:{"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})},
         body:JSON.stringify({active:!u.active})
       });
-      if(!r.ok){const d=await r.json();throw new Error(d.detail||"Update failed");}
+      if(!r.ok){const d=await r.json().catch(()=>null);throw new Error(apiErrorMessage(d,"Update failed"));}
       load();
     } catch(e) { setErr(e.message); }
   };
@@ -1654,7 +1719,7 @@ function Users({authUser}) {
                 </div>
                 <input type="password" value={form.password}
                   onChange={e=>setForm({...form,password:e.target.value})}
-                  placeholder={editUser?"Unchanged":"Minimum 8 characters"}
+                  placeholder={editUser?"Unchanged":"Minimum 12 characters"}
                   style={{width:"100%",padding:"11px 14px",background:MD.surfaceDim,
                     border:`1px solid ${MD.outlineVar}`,borderRadius:MD.radiusMd,color:MD.onSurface,...TYPE.bodyMd,
                     boxSizing:"border-box"}}/>
@@ -1904,6 +1969,7 @@ function Exceptions({findings}) {
 export default function App() {
   const [view, setView]     = React.useState("dashboard");
   const [findings, setFindings] = React.useState([]);
+  const [impact, setImpact] = React.useState(null);
   const [runs, setRuns]     = React.useState([]);
   const [targets, setTargets] = React.useState([]);
   const [scanning, setScanning] = React.useState(false);
@@ -1964,12 +2030,15 @@ export default function App() {
 
   const load = React.useCallback(async () => {
     try {
-      const [f,r,t] = await Promise.all([
+      const [f,r,t,im] = await Promise.all([
         apiFetch("/findings?page_size=500").catch(()=>({items:[]})),
         apiFetch("/assessments/runs").catch(()=>({items:[]})),
         apiFetch("/targets").catch(()=>({items:[]})),
+        // Optional: an older API without this endpoint just hides the card.
+        apiFetch("/findings/impact").catch(()=>null),
       ]);
       setFindings(f.items||[]);
+      setImpact(im);
       setRuns(r.items||[]); setTargets(t.items||[]); setOnline(true);
       if(!(r.items||[]).find(x=>x.status==="running"||x.status==="pending")) {
         setScanning(false);
@@ -1993,7 +2062,17 @@ export default function App() {
       await apiPost("/assessments/run",{target_id:list[0].id});
       if(poll.current)clearInterval(poll.current);
       poll.current=setInterval(load,3000);
-    }catch(e){alert(e?.message==="403"?"Only admins can start a scan.":"Scan failed: "+e);setScanning(false);}
+    }catch(e){
+      const SCAN_ERRORS={
+        "403":"Only admins can start a scan.",
+        "409":"A scan is already pending or running for this tenant. Wait for it to finish.",
+        "503":"Could not queue the scan. Check that the worker and Redis containers are running.",
+      };
+      alert(SCAN_ERRORS[e?.message]||"Scan failed: "+e);
+      // On 409 a scan really is in progress, so keep showing it and keep polling.
+      if(e?.message==="409"){if(!poll.current)poll.current=setInterval(load,3000);}
+      else setScanning(false);
+    }
   };
 
   const fail=findings.filter(f=>f.status==="failed");
@@ -2001,7 +2080,7 @@ export default function App() {
   const last=runs.find(r=>r.status==="completed")?.completed_at;
 
   const VIEWS={
-    dashboard:<Dashboard findings={findings} runs={runs}/>,
+    dashboard:<Dashboard findings={findings} runs={runs} impact={impact}/>,
     findings:<Findings findings={findings}/>,
     compliance:<Compliance findings={findings}/>,
     remediation:<Remediation findings={findings}/>,
@@ -2117,7 +2196,7 @@ export default function App() {
                 background:MD.primaryContainer,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 ...TYPE.labelMd,color:MD.onPrimaryContainer}}>EG</div>
-              <span style={{...TYPE.labelLg,color:MD.outline,fontWeight:600}}>EntraGuard v2.0</span>
+              <span style={{...TYPE.labelLg,color:MD.outline,fontWeight:600}}>EntraGuard v{APP_VERSION}</span>
             </div>
             <span style={{color:MD.outlineVar}}>|</span>
             <span style={{...TYPE.bodySm,color:MD.outline}}>Azure Identity Security Posture Management</span>

@@ -4,6 +4,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev build
 COPY services/assessment-engine/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY services/assessment-engine/app ./app
+# The worker handles tenant credentials and parses Graph responses; it needs
+# no root privileges and writes nothing outside /tmp.
+RUN useradd --system --uid 10001 --no-create-home entraguard
+USER 10001
 # Same code as the worker image, but runs Celery beat (the daily scan
 # trigger). Published images up to v2.3.1 shipped the worker CMD here,
 # so scheduled scans never fired for Docker Hub users.

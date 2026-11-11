@@ -77,7 +77,7 @@ def test_viewer_cannot_mutate(client):
 
 def test_target_update_rejects_unknown_fields(client):
     r = client.put("/api/v1/targets/abc", json={"id": "evil", "created_at": "x"}, headers=bearer())
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 def test_malformed_ids_are_404(client):
@@ -126,9 +126,10 @@ def test_msal_users_cannot_get_local_passwords(client):
     _resolve_msal_role("someone@contoso.com", "Someone")
     r = client.put("/api/v1/users/msal:someone@contoso.com", json={"password": "longenough1"}, headers=bearer())
     assert r.status_code == 400
-    r = client.post("/api/v1/users", json={"username": "msal:x@y.com", "password": "longenough1", "name": "x"},
+    # ":" isn't a valid username character, so the msal: namespace can't be claimed.
+    r = client.post("/api/v1/users", json={"username": "msal:x@y.com", "password": "long-enough-pass-1", "name": "x"},
                     headers=bearer())
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 def test_health_does_not_derive_id_from_secret(client):

@@ -71,13 +71,13 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### 4. Hot-reload for backend changes
+### 4. Applying backend changes
 
-The assessment engine reads `tasks.py` on each task execution. After editing:
+The worker runs on a read-only filesystem, so rebuild it after editing (fast once the base layers are cached):
 
 ```bash
-docker cp services/assessment-engine/app/tasks.py entra-guard-worker:/app/app/tasks.py
-docker restart entra-guard-worker
+docker compose up -d --build assessment-engine     # engine / checks
+docker compose up -d --build api                   # API
 ```
 
 ### 5. Hot-reload for frontend changes (source builds only)
@@ -193,9 +193,9 @@ In `services/web-ui/src/App.tsx`, find the `REM` dictionary and add an entry:
 First run the unit tests — `services/assessment-engine/tests/test_checks.py` runs every registered check against an empty fake tenant and fails if any check returns a malformed result or reuses another check's ID (see [Running the tests](#running-the-tests)). Then test against a real tenant:
 
 ```bash
-# Deploy and test
-docker cp services/assessment-engine/app/tasks.py entra-guard-worker:/app/app/tasks.py
-docker restart entra-guard-worker
+# Rebuild and restart the worker (it runs on a read-only filesystem, so
+# `docker cp` into the container no longer works)
+docker compose up -d --build assessment-engine
 
 # Trigger a scan and watch logs
 curl -X POST http://localhost:8000/api/v1/assessments/run \

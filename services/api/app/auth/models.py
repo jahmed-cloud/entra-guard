@@ -1,9 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    # Upper bounds stop a multi-megabyte "password" from being fed to PBKDF2.
+    username: str = Field(min_length=1, max_length=256)
+    password: str = Field(min_length=1, max_length=1024)
 
 class TokenResponse(BaseModel):
     access_token: str

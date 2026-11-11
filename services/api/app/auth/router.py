@@ -4,6 +4,7 @@ from urllib.parse import urlencode, quote
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from app.auth.models import LoginRequest, TokenResponse
+from app.core.audit import audit
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,6 +36,16 @@ MSAL_SCOPES        = "openid profile email User.Read"
 # MSAL user starts as viewer and can be promoted from the Users page.
 MSAL_ADMIN_USERS   = {u.strip().lower() for u in os.getenv("MSAL_ADMIN_USERS", "").split(",") if u.strip()}
 MSAL_STATE_COOKIE  = "eg_oauth_state"
+
+# Misconfigurations that leave the app open or unusable are easy to miss in
+# a wall of container logs — say so once, loudly, at startup.
+if not AUTH_ENABLED:
+    log.warning("AUTH_ENABLED=false: every API endpoint is open to anyone who can reach it. "
+                "Set AUTH_ENABLED=true unless this instance is only reachable from a trusted network.")
+elif not LOCAL_ADMIN_PASS and not (AZURE_TENANT_ID and AZURE_CLIENT_ID):
+    log.warning("AUTH_ENABLED=true but neither LOCAL_ADMIN_PASSWORD nor Microsoft sign-in is configured: nobody can log in.")
+elif LOCAL_ADMIN_PASS and len(LOCAL_ADMIN_PASS) < 12:
+    log.warning("LOCAL_ADMIN_PASSWORD is shorter than 12 characters. Use a long random password for the built-in admin.")
 
 
 def constant_time_equals(a: str, b: str) -> bool:
@@ -68,12 +79,32 @@ def get_token_from_request(request: Request) -> str:
     raise HTTPException(401, "Not authenticated")
 
 
+def _current_account(claims: dict) -> dict:
+    """Re-checks the signed-in account against the user store on every
+    request. A JWT is valid for JWT_EXPIRE_HOURS, so without this a user who
+    was disabled, deleted or demoted kept their old access (and old role)
+    until the token expired. The role always comes from the store, never
+    from the token. Imported lazily because routers/users.py imports this
+    module."""
+    from app.routers.users import load_users, msal_store_key
+    if claims.get("auth_type") == "msal":
+        upn = (claims.get("email") or "").lower()
+        if upn in MSAL_ADMIN_USERS:
+            return {**claims, "role": "admin"}
+        record = load_users().get(msal_store_key(upn))
+    else:
+        record = load_users().get(claims.get("sub"))
+    if record is None or not record.get("active", True):
+        raise HTTPException(401, "Account is disabled or no longer exists")
+    return {**claims, "role": record.get("role", "viewer")}
+
+
 def require_auth(request: Request):
     """Dependency — skip if AUTH_ENABLED is false"""
     if not AUTH_ENABLED:
         return {"sub": "anonymous", "name": "Anonymous", "auth_type": "disabled", "role": "admin"}
     token = get_token_from_request(request)
-    return verify_token(token)
+    return _current_account(verify_token(token))
 
 
 def require_admin(user=Depends(require_auth)):
@@ -137,12 +168,12 @@ async def local_login(req: LoginRequest):
     pass_match = constant_time_equals(req.password, LOCAL_ADMIN_PASS)
 
     if not (user_match and pass_match):
-        log.warning(f"Failed local login attempt for user: {req.username}")
+        audit("login_failed", req.username, method="local")
         raise HTTPException(401, "Invalid username or password")
 
     user = {"sub": LOCAL_ADMIN_USER, "name": "Local Administrator", "auth_type": "local", "role": "admin"}
     token = create_token(user)
-    log.info(f"Local admin login successful: {req.username}")
+    audit("login", user, method="local")
     return TokenResponse(access_token=token, user=user)
 
 
@@ -225,7 +256,7 @@ async def msal_callback(request: Request, code: str = None, state: str = None, e
         }
 
         eg_token = create_token(user)
-        log.info(f"MSAL login successful: {user.get('email')} role={user['role']}")
+        audit("login", user.get("email"), method="msal", role=user["role"])
 
         response = RedirectResponse(f"{APP_BASE_URL}/")
         response.set_cookie("eg_token", eg_token, httponly=True, samesite="lax",

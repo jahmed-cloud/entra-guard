@@ -9,11 +9,26 @@
 #
 # Images are multi-arch (linux/amd64 + linux/arm64) — Docker picks the right
 # one automatically, so no `platform:` line is needed (Raspberry Pi and Apple
-# Silicon included). Pin a version with EG_VERSION=v2.4.0 in .env.
+# Silicon included). Pin a version with EG_VERSION=v2.5.0 in .env.
 #
 # Every service reads .env via env_file; the environment: blocks below only
 # set the internal connection strings, which you shouldn't need to change.
 # ============================================================================
+
+# Container hardening shared by the services below.
+# - no-new-privileges: a process can't gain privileges through setuid binaries.
+# - cap_drop ALL (our own Python services only): they need no Linux
+#   capabilities. Postgres, Redis and nginx keep the defaults because their
+#   entrypoints start as root and then drop to an unprivileged user.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+
+x-hardened-app: &hardened-app
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
@@ -24,6 +39,7 @@ x-engine-env: &engine-env
 services:
 
   postgres:
+    <<: *hardened
     image: postgres:16-alpine
     container_name: entra-guard-db
     restart: unless-stopped
@@ -41,6 +57,7 @@ services:
     networks: [internal]
 
   redis:
+    <<: *hardened
     image: redis:7-alpine
     container_name: entra-guard-redis
     restart: unless-stopped
@@ -55,6 +72,7 @@ services:
     networks: [internal]
 
   api:
+    <<: *hardened-app
     image: jahmed22/entra-guard-api:${EG_VERSION:-latest}
     container_name: entra-guard-api
     restart: unless-stopped
@@ -64,6 +82,12 @@ services:
     # API access, ideally behind a firewall.
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
@@ -78,9 +102,13 @@ services:
     networks: [internal, external]
 
   worker:
+    <<: *hardened-app
     image: jahmed22/entra-guard-worker:${EG_VERSION:-latest}
     container_name: entra-guard-worker
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
     env_file: .env
     environment: *engine-env
     extra_hosts:
@@ -92,9 +120,13 @@ services:
     networks: [internal, external]
 
   scheduler:
+    <<: *hardened-app
     image: jahmed22/entra-guard-scheduler:${EG_VERSION:-latest}
     container_name: entra-guard-scheduler
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
     # Explicit so it also works with older scheduler images (<= v2.3.1),
     # which mistakenly default to the worker command.
     command: celery -A app.tasks beat --loglevel=info --schedule=/tmp/celerybeat-schedule
@@ -106,6 +138,7 @@ services:
     networks: [internal, external]
 
   ui:
+    <<: *hardened
     image: jahmed22/entra-guard-ui:${EG_VERSION:-latest}
     container_name: entra-guard-ui
     restart: unless-stopped

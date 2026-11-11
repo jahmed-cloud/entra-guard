@@ -4,4 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev build
 COPY services/assessment-engine/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY services/assessment-engine/app ./app
+# The worker handles tenant credentials and parses Graph responses; it needs
+# no root privileges and writes nothing outside /tmp.
+RUN useradd --system --uid 10001 --no-create-home entraguard
+USER 10001
 CMD ["celery", "-A", "app.tasks", "worker", "--loglevel=info", "--concurrency=2"]
