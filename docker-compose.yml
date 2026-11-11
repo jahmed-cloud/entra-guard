@@ -4,9 +4,25 @@
 # cp .env.example .env && nano .env && docker compose up -d
 # ============================================================================
 
+# Container hardening shared by the services below.
+# - no-new-privileges: a process can't gain privileges through setuid binaries.
+# - cap_drop ALL (our own Python services only): they need no Linux
+#   capabilities. Postgres, Redis and nginx keep the defaults because their
+#   entrypoints start as root and then drop to an unprivileged user.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+
+x-hardened-app: &hardened-app
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 services:
 
   postgres:
+    <<: *hardened
     image: postgres:16-alpine
     container_name: entra-guard-db
     restart: unless-stopped
@@ -25,6 +41,7 @@ services:
       - internal
 
   redis:
+    <<: *hardened
     image: redis:7-alpine
     container_name: entra-guard-redis
     restart: unless-stopped
@@ -40,13 +57,26 @@ services:
       - internal
 
   api:
+    <<: *hardened-app
     build:
       context: .
       dockerfile: Dockerfile.api
     container_name: entra-guard-api
     restart: unless-stopped
+    # The dashboard reaches the API through the web-ui container, so this port
+    # is only for scripts/curl on the host itself. Bound to localhost on
+    # purpose: published on all interfaces it let anyone on the network
+    # bypass nginx (and its client-IP header, which the login rate limiter
+    # trusts from private addresses). Use "${API_PORT:-8000}:8000" only if you
+    # need remote API access, ideally behind a firewall.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
       REDIS_URL: redis://redis:6379/0
@@ -69,6 +99,13 @@ services:
       MSAL_ADMIN_USERS: ${MSAL_ADMIN_USERS:-}
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-8}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}
+      LOGIN_RATE_LIMIT_ATTEMPTS: ${LOGIN_RATE_LIMIT_ATTEMPTS:-5}
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:-300}
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-12}
+      SCAN_STALE_MINUTES: ${SCAN_STALE_MINUTES:-60}
+      ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       INSTANCE_NAME: ${INSTANCE_NAME:-EntraGuard}
       TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
 
@@ -86,11 +123,15 @@ services:
       - external
 
   assessment-engine:
+    <<: *hardened-app
     build:
       context: .
       dockerfile: Dockerfile.engine
     container_name: entra-guard-worker
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
       REDIS_URL: redis://redis:6379/0
@@ -144,12 +185,15 @@ services:
       - external
 
   scheduler:
+    <<: *hardened-app
     build:
       context: .
-      dockerfile: Dockerfile.engine
+      dockerfile: Dockerfile.scheduler
     container_name: entra-guard-scheduler
     restart: unless-stopped
-    command: celery -A app.tasks beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    read_only: true
+    tmpfs:
+      - /tmp
 
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cspm_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cspm}
@@ -172,6 +216,7 @@ services:
       - external
 
   web-ui:
+    <<: *hardened
     build:
       context: .
       dockerfile: Dockerfile.web

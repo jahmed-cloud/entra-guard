@@ -59,6 +59,12 @@ Every finding includes a **plain-English risk description**, **numbered step-by-
 - Scheduled daily scans (06:00 UTC by default, configurable via cron)
 - Graceful error handling — one failing check never blocks others
 
+### Impact — what to fix first
+- **Risk-weighted score**: checks are weighted by severity (Critical 10, High 7, Medium 4, Low 1), so one Critical gap is not hidden by many passing Low checks
+- **Fix first** card ranks failed checks by how many points fixing each one adds, flags low-effort Critical/High items as quick wins, and shows the score you would reach
+- Checks that could not be verified (errors, missing Graph permissions) are reported separately and never counted as passes or failures
+- Available to scripts at `GET /api/v1/findings/impact`
+
 ### Dashboard
 - Security posture score with trend charts
 - Severity breakdown — Critical, High, Medium, Low
@@ -177,7 +183,7 @@ LOCAL_ADMIN_PASSWORD=your-admin-password
 APP_BASE_URL=http://your-server-ip:3000
 ```
 
-Every variable is documented in [`.env.example`](.env.example). Set `EG_VERSION=v2.4.0` to pin an image version instead of `latest`.
+Every variable is documented in [`.env.example`](.env.example). Set `EG_VERSION=v2.5.0` to pin an image version instead of `latest`.
 
 ### 4. Pull and start
 
@@ -199,10 +205,10 @@ Navigate to **http://localhost:3000**, log in with your `LOCAL_ADMIN_USERNAME` /
 
 | Image | Tags | Size |
 |-------|------|------|
-| `jahmed22/entra-guard-api` | `latest`, `v2.4.0` | ~600 MB |
-| `jahmed22/entra-guard-ui` | `latest`, `v2.4.0` | ~50 MB |
-| `jahmed22/entra-guard-worker` | `latest`, `v2.4.0` | ~530 MB |
-| `jahmed22/entra-guard-scheduler` | `latest`, `v2.4.0` | ~530 MB |
+| `jahmed22/entra-guard-api` | `latest`, `v2.5.0` | ~600 MB |
+| `jahmed22/entra-guard-ui` | `latest`, `v2.5.0` | ~50 MB |
+| `jahmed22/entra-guard-worker` | `latest`, `v2.5.0` | ~530 MB |
+| `jahmed22/entra-guard-scheduler` | `latest`, `v2.5.0` | ~530 MB |
 
 All images are multi-arch: **linux/amd64** and **linux/arm64** (Raspberry Pi 4/5, Apple Silicon, DietPi).
 
@@ -238,7 +244,7 @@ docker compose up -d
 Each image has its own Dockerfile. Build and push all four as multi-arch manifests (`linux/amd64` + `linux/arm64`) with `docker buildx`:
 
 ```bash
-VERSION=v2.4.0
+VERSION=v2.5.0
 for pair in api:Dockerfile.api worker:Dockerfile.engine scheduler:Dockerfile.scheduler ui:Dockerfile.web; do
   name=${pair%%:*}; file=${pair#*:}
   docker buildx build --platform linux/amd64,linux/arm64 -f "$file" \
@@ -271,6 +277,11 @@ The scheduler must be built from `Dockerfile.scheduler` (Celery beat). Images up
 | `LOCAL_ADMIN_PASSWORD` | — | Password for the built-in local admin account |
 | `SECRET_KEY` | — | JWT signing key. With `AUTH_ENABLED=true` the API **refuses to start** unless this is ≥ 32 random characters (`openssl rand -hex 32`) |
 | `MSAL_ADMIN_USERS` | — | Comma-separated UPNs that get the admin role on Microsoft sign-in. Everyone else starts as a viewer |
+| `PASSWORD_MIN_LENGTH` | `12` | Minimum length for passwords set on the Users page (never below 8) |
+| `LOGIN_RATE_LIMIT_ATTEMPTS` | `5` | Login attempts allowed per client IP per window (counted in Redis) |
+| `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | Length of the login rate-limit window |
+| `SCAN_STALE_MINUTES` | `60` | A pending/running scan older than this no longer blocks a new one |
+| `ENABLE_API_DOCS` | `false` | Expose `/docs` and `/openapi.json` on the API port |
 | `JWT_EXPIRE_HOURS` | `8` | Session token lifetime in hours |
 | `APP_BASE_URL` | `http://localhost:3000` | Public URL of the dashboard (used for SSO redirect URIs) |
 
@@ -427,6 +438,21 @@ docker compose logs api --tail=50 | grep -i auth
 
 There are two roles: **admin** and **viewer**. Viewers can read findings, runs and targets. Only admins can start scans, create/edit/delete targets, and manage users — the API returns `403` to viewers for those calls.
 
+Role changes, disabling and deleting a user take effect on that user's next request, not when their session expires.
+
+### Security hardening
+
+- **Sessions** are checked against the user store on every request; the role is never taken from the token.
+- **Login** is rate-limited per client IP in Redis, and every failure looks the same (no way to tell which usernames exist).
+- **Passwords** are hashed with PBKDF2-SHA256; new ones need at least `PASSWORD_MIN_LENGTH` characters.
+- **Input** to every write endpoint is validated; the target config rejects malformed tenant IDs and anything that looks like a secret.
+- **Audit trail**: logins, failed logins, user and target changes and scan starts are logged on the `entraguard.audit` logger (`docker compose logs api | grep entraguard.audit`).
+- **Browser**: the dashboard is served with a Content-Security-Policy that only allows its own scripts, and cannot be framed.
+- **Containers**: the worker and scheduler run as a non-root user on a read-only filesystem; all app containers drop Linux capabilities and set `no-new-privileges`. The API port is bound to `127.0.0.1`.
+- **Scanner**: the Graph token is only ever sent to `graph.microsoft.com`, and the app registration needs read-only permissions.
+
+To report a vulnerability, email [iam@jahmed.cloud](mailto:iam@jahmed.cloud) rather than opening a public issue.
+
 ### Microsoft SSO (Pending HTTPS)
 
 Users who sign in with Microsoft are **viewers by default**. List the UPNs that should be admins in `MSAL_ADMIN_USERS`, or promote them later from the Users page (they appear there as `msal:<upn>` after their first sign-in). The OAuth `state` parameter is verified on callback.
@@ -538,13 +564,12 @@ Add an entry to the `REM` dictionary in `App.tsx`:
 },
 ```
 
-### Deploy without rebuilding
+### Deploy your check
+
+The worker and scheduler run on a read-only filesystem, so files can't be copied into the running containers. Rebuild them from source instead (a few seconds once the base layers are cached):
 
 ```bash
-# Copy updated tasks.py into the running containers
-docker cp services/assessment-engine/app/tasks.py entra-guard-worker:/app/app/tasks.py
-docker cp services/assessment-engine/app/tasks.py entra-guard-scheduler:/app/app/tasks.py
-docker restart entra-guard-worker entra-guard-scheduler
+docker compose up -d --build assessment-engine scheduler
 ```
 
 ---
@@ -829,6 +854,8 @@ Quick summary:
 3. Add your check function to `tasks.py` and register it in `ALL_CHECKS`
 4. Add remediation text to `App.tsx` under `REM`
 5. Run the unit tests (see [CONTRIBUTING.md](CONTRIBUTING.md#running-the-tests)) and test against a real or demo tenant
+
+Project notes for contributors live in [`docs/`](docs): [CONTEXT](docs/CONTEXT.md) (architecture), [MEMORY](docs/MEMORY.md) (decisions and gotchas), [TASKS](docs/TASKS.md) (roadmap) and [RELEASING](docs/RELEASING.md).
 6. Open a pull request describing what the check tests and why it matters
 
 ---

@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 TELEMETRY_ENABLED  = os.getenv("TELEMETRY_ENABLED", "false").lower() == "true"
 TELEMETRY_ENDPOINT = os.getenv("TELEMETRY_ENDPOINT", "https://telemetry.entra-guard.app/heartbeat")
 INSTANCE_NAME      = os.getenv("INSTANCE_NAME", "")
-APP_VERSION        = "2.0"
+APP_VERSION        = "2.5.0"
 INSTANCE_ID_FILE   = os.getenv("INSTANCE_ID_FILE", "/app/data/instance_id")
 
 

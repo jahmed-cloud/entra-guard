@@ -1,4 +1,7 @@
 import os
+import re
+import math
+import time
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
@@ -30,8 +33,25 @@ def get_sync_db():
 
 
 # ── MS Graph client ──────────────────────────────────────────────────────────
+_GUID = r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}"
+_GUID_RE = re.compile(rf"^{_GUID}$")
+# Same rule as the API's target validation (routers/targets.py): a tenant is
+# a GUID or a verified domain. Checked again here because the worker reads
+# the target config straight from the database.
+_TENANT_RE = re.compile(rf"^(?:{_GUID}|(?=.{{4,253}}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{{0,61}}[A-Za-z0-9])?\.)+[A-Za-z]{{2,63}})$")
+
+
 class GraphClient:
+    GRAPH_ORIGIN = "https://graph.microsoft.com"
+    MAX_RETRIES = 3
+    MAX_RETRY_DELAY = 30  # seconds
+
     def __init__(self, tenant_id, client_id, client_secret):
+        # Both values are interpolated into the Microsoft login URL below.
+        if not _TENANT_RE.match(str(tenant_id or "")):
+            raise ValueError("Invalid tenant ID: expected a GUID or a domain such as contoso.onmicrosoft.com")
+        if not _GUID_RE.match(str(client_id or "")):
+            raise ValueError("Invalid client ID: expected a GUID")
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
@@ -57,13 +77,34 @@ class GraphClient:
 
     def get(self, path, headers=None, **kwargs):
         self._ensure_token()
-        base = "https://graph.microsoft.com/v1.0"
-        url = path if path.startswith("http") else f"{base}{path}"
+        if path.startswith("http"):
+            # Absolute URLs only come from @odata.nextLink. Never send the
+            # bearer token anywhere but Graph, whatever a response says.
+            if not path.startswith(self.GRAPH_ORIGIN + "/"):
+                raise ValueError("Refusing to send the Graph token to a non-Graph URL")
+            url = path
+        else:
+            url = f"{self.GRAPH_ORIGIN}/v1.0{path}"
         # Extra headers (e.g. ConsistencyLevel: eventual for advanced queries
         # like $count / NOT filters) are merged with, never replace, auth.
-        r = self._http.get(url, headers={**(headers or {}), "Authorization": f"Bearer {self._token}"}, **kwargs)
+        request_headers = {**(headers or {}), "Authorization": f"Bearer {self._token}"}
+        for attempt in range(self.MAX_RETRIES + 1):
+            r = self._http.get(url, headers=request_headers, **kwargs)
+            # Graph throttles busy tenants (429) and has transient 503/504s.
+            # Without a retry the check reported "error", or a wrong result
+            # built from a partial page set.
+            if r.status_code not in (429, 503, 504) or attempt == self.MAX_RETRIES:
+                break
+            time.sleep(self._retry_delay(r, attempt))
         r.raise_for_status()
         return r.json()
+
+    def _retry_delay(self, response, attempt):
+        try:
+            delay = float(response.headers.get("Retry-After", ""))
+        except (TypeError, ValueError):
+            delay = 2 ** attempt
+        return max(0.0, min(delay, self.MAX_RETRY_DELAY))
 
     def get_all_pages(self, path, headers=None):
         results, url = [], path
@@ -2647,6 +2688,83 @@ def check_break_glass_signin_frequency(graph, target_config):
                 "estimated_effort": "Low"}
 
 
+# ── Result validation ─────────────────────────────────────────────────────────
+VALID_STATUSES = ("passed", "failed", "error")
+VALID_SEVERITIES = ("Critical", "High", "Medium", "Low")
+VALID_EFFORTS = ("Low", "Moderate", "High")
+MAX_AFFECTED_RESOURCES = 500
+MAX_TEXT_LENGTH = 4000
+
+
+def _text(value, default=""):
+    return (default if value is None else str(value))[:MAX_TEXT_LENGTH]
+
+
+def normalize_result(result, check_name):
+    """Validates one check's return value before it is counted and stored.
+
+    With 120+ hand-written checks, a single one returning a tuple, a status
+    of "pass", a score of None or 50,000 affected users used to surface as a
+    failed INSERT (or a multi-megabyte row) long after the check ran. Bad
+    values are coerced to safe ones and logged; a result with no usable
+    check_id is dropped (returns None) and the caller counts it as skipped.
+    """
+    if not isinstance(result, dict):
+        log.error(f"Check {check_name} returned {type(result).__name__}, expected dict; dropped")
+        return None
+    check_id = result.get("check_id")
+    if not isinstance(check_id, str) or not check_id.strip() or len(check_id) > 100:
+        log.error(f"Check {check_name} returned an invalid check_id {check_id!r}; dropped")
+        return None
+
+    out = dict(result)
+    problems = []
+
+    if out.get("status") not in VALID_STATUSES:
+        problems.append(f"status={out.get('status')!r}")
+        out["status"] = "error"
+    if out.get("severity") not in VALID_SEVERITIES:
+        problems.append(f"severity={out.get('severity')!r}")
+        out["severity"] = "Medium"
+    if out.get("estimated_effort") not in VALID_EFFORTS:
+        out["estimated_effort"] = "Low"
+
+    try:
+        score = float(out.get("score", 0.0))
+        if isinstance(out.get("score"), bool) or not math.isfinite(score):
+            raise ValueError
+    except (TypeError, ValueError):
+        problems.append(f"score={out.get('score')!r}")
+        score = 0.0
+    # The column is NUMERIC(4,1) and the UI's scale is 0-10.
+    out["score"] = round(min(max(score, 0.0), 10.0), 1)
+
+    affected = out.get("affected_resources")
+    if not isinstance(affected, list):
+        if affected not in (None, ""):
+            problems.append(f"affected_resources is {type(affected).__name__}")
+        affected = []
+    evidence = out.get("evidence")
+    if not isinstance(evidence, dict):
+        if evidence not in (None, ""):
+            problems.append(f"evidence is {type(evidence).__name__}")
+        evidence = {}
+    if len(affected) > MAX_AFFECTED_RESOURCES:
+        # Keep the real total so the UI and impact ranking don't under-report.
+        evidence = {**evidence, "affected_total": len(affected), "affected_truncated": True}
+        affected = affected[:MAX_AFFECTED_RESOURCES]
+    out["affected_resources"] = affected
+    out["evidence"] = evidence
+
+    out["check_id"] = check_id.strip()
+    out["risk_description"] = _text(out.get("risk_description"))
+    out["remediation_steps"] = _text(out.get("remediation_steps"))
+
+    if problems:
+        log.warning(f"Check {check_name} ({out['check_id']}) returned invalid values, coerced: {'; '.join(problems)}")
+    return out
+
+
 ALL_CHECKS = [
     # ── Threat-informed hardening (federation trust, licence blind spots,
     #    CBA trust anchors, active dangerous OAuth grants) ────────────────
@@ -2769,7 +2887,13 @@ def run_assessment_task(run_id: str, target_id: str):
             conn.commit()
             return
 
-        graph = GraphClient(tenant_id, client_id, client_secret)
+        try:
+            graph = GraphClient(tenant_id, client_id, client_secret)
+        except ValueError as e:
+            conn.execute(text("UPDATE scan_runs SET status='failed', completed_at=now(), error_message=:err WHERE id=:id"),
+                         {"id": run_id, "err": str(e)})
+            conn.commit()
+            return
         passed = failed = skipped = 0
 
         # ── Phase 1: run every check, hold results in memory ────────────────
@@ -2780,8 +2904,11 @@ def run_assessment_task(run_id: str, target_id: str):
         all_results = []
         for check_fn in ALL_CHECKS:
             try:
-                result = check_fn(graph, config)
-                status = result.get("status", "error")
+                result = normalize_result(check_fn(graph, config), check_fn.__name__)
+                if result is None:
+                    skipped += 1
+                    continue
+                status = result["status"]
                 if status == "passed":
                     passed += 1
                 elif status == "failed":

@@ -241,3 +241,45 @@ The images on Docker Hub (`jahmed22/entra-guard-{api,worker,scheduler,ui}`) are 
 | API port bound to `127.0.0.1` | `curl localhost:8000` on the server still works; other machines can no longer reach the API directly (the dashboard is unaffected). Change the port mapping if you relied on remote API access. |
 | New `users_data` volume on the API | Local users created on the Users page now survive container recreation. If you were using the old README compose, users you created there were only in the container and will need to be recreated once. |
 | `EG_VERSION` in `.env` | Pin a release (e.g. `EG_VERSION=v2.4.0`) instead of tracking `latest`. |
+
+---
+
+## 11. v2.5.0 — hardening, validation and impact scoring
+
+**Possibly breaking — read first:**
+
+| Change | What you might notice |
+|---|---|
+| New passwords need at least 12 characters (`PASSWORD_MIN_LENGTH`) and must not contain the username | Creating a user or changing a password with a shorter one returns `400`. Existing passwords keep working. |
+| Usernames are limited to letters, digits and `. _ @ -` (3–64 characters) | Creating a user with spaces or other characters returns `422`. Existing users are unaffected. |
+| Request bodies are validated; unknown fields are rejected | `POST/PUT /targets`, `/users` and `/assessments/run` return `422` for unknown or malformed fields (`PUT /targets` used to return `400`). Malformed IDs and paging values in `/findings` queries return `422`. |
+| Target `config` is validated | `tenant_id` must be a GUID or a domain, `client_id` and `break_glass_group_id` must be GUIDs, and keys that look like secrets are refused. A scan for an existing target with an invalid tenant or client ID now fails immediately with a clear message. |
+| One scan per tenant at a time | Starting a scan while one is pending or running returns `409`. A scan stuck for more than `SCAN_STALE_MINUTES` (default 60) stops blocking. |
+| Sessions are re-checked on every request | A disabled, deleted or demoted user loses access (or admin rights) at once instead of when their token expires. |
+| Disabled accounts get the generic "Invalid username or password" | Previously the login said "Account is disabled". |
+| The built-in admin can't be edited on the Users page; admins can't disable or demote themselves | `400` with an explanation. Change the built-in admin through `LOCAL_ADMIN_*` in `.env`. |
+| `docker-compose.yml` binds the API to `127.0.0.1:8000` | Other machines can no longer reach the API port directly; the dashboard is unaffected. (The example compose already did this.) |
+| Interactive API docs are off | `/docs` and `/openapi.json` return `404` unless `ENABLE_API_DOCS=true`. |
+| Worker and scheduler run as a non-root user with a read-only filesystem | Nothing, unless you mounted files into those containers that only root can read. `docker cp` into the worker (the old "deploy without rebuilding" tip) no longer works; rebuild the image instead. |
+| Queue failures return `503` with a generic message | The detail is in the API log and in Scan History, not in the HTTP response. |
+
+**New:**
+
+- **Impact scoring.** `GET /api/v1/findings/impact` and the dashboard's "Fix first — biggest impact" card: a severity-weighted score, the points each fix would add, quick wins, and the score you would reach. Checks that could not be verified are excluded.
+- **Audit trail** on the `entraguard.audit` logger: logins, failed logins, user and target changes, scan starts. The API now logs at `LOG_LEVEL` (default `INFO`).
+- **Redis-backed login rate limit**, shared by all API workers and replicas, with an in-memory fallback. This closes the "limit is per process" item from §9.
+- **Security headers**: a Content-Security-Policy, `X-Frame-Options`, `nosniff` and `Referrer-Policy` on the dashboard; `no-store` and a deny-all CSP on API responses; HSTS when `APP_BASE_URL` is HTTPS. Request bodies over 1 MB are refused.
+- **Container hardening** in both compose files: `no-new-privileges` everywhere, all capabilities dropped for the API, worker and scheduler, an API healthcheck.
+- **Scanner**: results are validated before they are stored (bad values are coerced and logged instead of failing the insert); Graph throttling (429/503/504) is retried with backoff; the Graph token is never sent to a non-Graph URL.
+- New settings: `PASSWORD_MIN_LENGTH`, `SCAN_STALE_MINUTES`, `ENABLE_API_DOCS`, `LOG_LEVEL` (see `.env.example`). No database changes.
+
+**Fixed:**
+
+- On a brand-new database the API's two worker processes raced to create the tables; one crashed at startup and was not restarted, leaving the API on a single worker until the next restart. Startup is now serialised with a Postgres advisory lock.
+- Login timing and messages revealed which usernames exist.
+- A user entry in `users.json` with the built-in admin's name could shadow the built-in admin.
+- `users.json` is now written atomically with mode `0600`; a crash mid-write could previously truncate it.
+- A username containing a newline could forge log lines.
+- Validation errors showed as `[object Object]` on the Users page.
+
+**Known, still open** (tracked in `docs/TASKS.md`): the API container still runs as root; users are still a JSON file; exceptions and "fixed" markers are still per-browser; there are no database migrations.
