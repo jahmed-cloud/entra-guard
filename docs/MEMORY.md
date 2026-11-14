@@ -22,6 +22,7 @@ Decisions that were made, why, and mistakes worth not repeating. Add an entry wh
 | Worker/scheduler run as uid 10001, read-only root filesystem | They handle tenant credentials and parse remote data. The **API still runs as root**: existing `users_data` volumes are root-owned and a non-root API could not write them (see TASKS). |
 | API port bound to `127.0.0.1` in both compose files | Published on all interfaces it bypassed nginx, and the limiter trusts `X-Real-IP` from private peers. |
 | CSP allows `style-src 'unsafe-inline'` | The UI uses React inline styles throughout. Scripts are `'self'` only. |
+| The product is called ISPM (identity security posture management), not CSPM | CSPM means cloud infrastructure posture (storage, networks, VMs), which EntraGuard does not cover. Internal names that still say `cspm` (database name and user, Celery app, the default app registration name `EntraGuard-CSPM`) are left alone because renaming them breaks existing installs. |
 | AI explanation is advisory only | It must never change a finding's status, score or severity. |
 | Telemetry is opt-in | Off in code and compose; the instance id is random, not derived from `SECRET_KEY`. |
 | `kombu==5.4.2` is pinned | `celery==5.4.0` allows kombu 5.7, which rejects `redis==5.0.4`; fresh builds crash-looped. `tests/test_dependencies.py` guards it. |
