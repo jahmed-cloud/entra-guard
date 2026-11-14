@@ -9,7 +9,7 @@
 #
 # Images are multi-arch (linux/amd64 + linux/arm64) — Docker picks the right
 # one automatically, so no `platform:` line is needed (Raspberry Pi and Apple
-# Silicon included). Pin a version with EG_VERSION=v2.5.0 in .env.
+# Silicon included). Pin a version with EG_VERSION=v2.5.1 in .env.
 #
 # Every service reads .env via env_file; the environment: blocks below only
 # set the internal connection strings, which you shouldn't need to change.

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import CHECK_TITLES from "./checkTitles.json";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "/api/v1";
@@ -196,9 +197,15 @@ const ScoreBar = ({score, max=10}) => {
   );
 };
 
+// Display title for a check. REM (below) has hand-written titles for the
+// checks with full remediation guides; checkTitles.json is generated from the
+// engine's docstrings (scripts/gen_check_titles.py) and covers every check.
+// Before this, checks without a REM entry showed their raw ID as the title.
+const titleOf = (id) => REM[id]?.title || CHECK_TITLES[id] || id;
+
 // Shown in the sidebar, login page and footer. Keep in step with APP_VERSION
 // in services/api/app/auth/tracker.py and the Docker image tag.
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.5.1";
 
 // The API answers validation failures (422) with a list of {loc, msg}
 // objects rather than a string; shown raw that rendered as "[object Object]".
@@ -567,7 +574,9 @@ function Top({target, scanning, onScan, online, lastScan, crits}) {
       background:MD.surfaceLow,borderBottom:`1px solid ${MD.outlineVar}`,
       display:"flex",alignItems:"center",padding:"0 24px",gap:16,zIndex:90,
       fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+      {/* overflow hidden: on narrow screens the tenant name truncates instead
+          of sliding underneath the critical badge and Run scan button */}
+      <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0,overflow:"hidden"}}>
         <span style={{width:8,height:8,borderRadius:"50%",
           background:online?SC.Low:SC.Critical,
           boxShadow:`0 0 0 3px ${online?SC.Low:SC.Critical}22`,flexShrink:0}}/>
@@ -576,7 +585,7 @@ function Top({target, scanning, onScan, online, lastScan, crits}) {
           <span style={{color:MD.outlineVar,fontSize:15}}>/</span>
           <span style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{target.name}</span>
         </>}
-        {lastScan&&<span style={{...TYPE.labelMd,color:MD.outline,marginLeft:6,flexShrink:0,fontWeight:500}}>
+        {lastScan&&<span className="eg-top-lastscan" style={{...TYPE.labelMd,color:MD.outline,marginLeft:6,flexShrink:0,fontWeight:500}}>
           Last scan {new Date(lastScan).toLocaleString()}
         </span>}
       </div>
@@ -894,7 +903,7 @@ function Dashboard({findings, runs, impact}) {
                       <span style={{...TYPE.labelMd,color:MD.outline}}>{a.check_id}</span>
                       {a.quick_win&&<Badge label="Quick win" color={SC.Low} container={SC_CONTAINER.Low} small/>}
                     </div>
-                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r?.title||a.check_id}</div>
+                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleOf(a.check_id)}</div>
                     <div style={{...TYPE.bodySm,color:MD.outline,marginTop:1}}>
                       {a.severity} · {a.effort} effort{a.affected_count>0?` · ${a.affected_count} affected`:""}
                     </div>
@@ -923,7 +932,7 @@ function Dashboard({findings, runs, impact}) {
                   <div style={{height:30,background:sc,borderRadius:2}}/>
                   <div style={{minWidth:0}}>
                     <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:1}}>{f.check_id}</div>
-                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r?.title||f.check_id}</div>
+                    <div style={{...TYPE.bodyMd,color:MD.onSurfaceVar,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleOf(f.check_id)}</div>
                   </div>
                   <Badge label={f.severity} color={sc} container={sevContainer(f)} small/>
                   <ScoreBar score={f.score}/>
@@ -936,11 +945,16 @@ function Dashboard({findings, runs, impact}) {
         <div style={{...CARD,display:"flex",flexDirection:"column",gap:14,minWidth:172}}>
           <div style={{...TYPE.labelSm,color:MD.outline}}>Coverage</div>
           {[
-            {l:"CA policies",total:15,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-CA-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
-            {l:"MFA",total:9,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-MFA-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
-            {l:"Identity",total:12,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-IDENTITY-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
-            {l:"Apps",total:12,pass:Object.values(findings.filter(f=>f.check_id.startsWith("AZURE-APP-")||f.check_id.startsWith("AZURE-CONSENT-")).reduce((a,f)=>{a[f.check_id]=f;return a},{})).filter(f=>f.status==="passed").length},
-          ].map(({l,total,pass})=>{
+            {l:"CA policies",match:id=>id.startsWith("AZURE-CA-")},
+            {l:"MFA",match:id=>id.startsWith("AZURE-MFA-")},
+            {l:"Identity",match:id=>id.startsWith("AZURE-IDENTITY-")},
+            {l:"Apps",match:id=>id.startsWith("AZURE-APP-")||id.startsWith("AZURE-CONSENT-")},
+          ].map(({l,match})=>{
+            // Totals come from the scan itself. They used to be hard-coded and
+            // went stale as checks were added ("17/15 pass", 113%).
+            const inGroup=Object.values(findings.filter(f=>match(f.check_id)).reduce((a,f)=>{a[f.check_id]=f;return a},{}));
+            return {l,total:inGroup.length,pass:inGroup.filter(f=>f.status==="passed").length};
+          }).map(({l,total,pass})=>{
             const pct=total>0?Math.round((pass/total)*100):0;
             const c=pct>=80?SC.Low:pct>=60?SC.Medium:SC.Critical;
             const r=21,circ=2*Math.PI*r;
@@ -974,7 +988,7 @@ function Findings({findings}) {
   const tog=(id)=>{const n=new Set(fixed);n.has(id)?n.delete(id):n.add(id);setFixed(n);localStorage.setItem("eg-fixed",JSON.stringify([...n]));};
 
   const list=findings.filter(f=>{
-    const r=REM[f.check_id];const t=r?.title||f.check_id;
+    const r=REM[f.check_id];const t=titleOf(f.check_id);
     return(sf==="All"||f.severity===sf)&&(st==="All"||f.status===st)
       &&(!q||f.check_id.toLowerCase().includes(q.toLowerCase())||t.toLowerCase().includes(q.toLowerCase()));
   }).sort((a,b)=>b.score-a.score||(SO[a.severity]||4)-(SO[b.severity]||4));
@@ -987,7 +1001,7 @@ function Findings({findings}) {
 
   const csv=()=>{
     const h=["Check ID","Title","Severity","Score","Status","Risk","Steps","Effort"];
-    const rows=list.map(f=>{const r=REM[f.check_id];return[f.check_id,r?.title||"",f.severity,f.score,f.status,r?.risk||f.risk_description||"",r?.steps?.join(" | ")||f.remediation_steps||"",f.estimated_effort||""];});
+    const rows=list.map(f=>{const r=REM[f.check_id];return[f.check_id,titleOf(f.check_id),f.severity,f.score,f.status,r?.risk||f.risk_description||"",r?.steps?.join(" | ")||f.remediation_steps||"",f.estimated_effort||""];});
     const c=[h,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([c],{type:"text/csv"}));a.download="findings.csv";a.click();
   };
@@ -1045,7 +1059,7 @@ function Findings({findings}) {
                 <span style={{...TYPE.bodyMd,color:isFx?MD.outlineVar:MD.onSurface,fontWeight:500,
                   overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
                   textDecoration:isFx?"line-through":"none"}}>
-                  {r?.title||f.check_id}
+                  {titleOf(f.check_id)}
                   {f.ai_false_positive_likelihood&&f.ai_false_positive_likelihood!=="none"&&(
                     <span title={`AI flagged this as a ${f.ai_false_positive_likelihood} false positive`}
                       style={{marginLeft:8,fontSize:11,color:SC.Medium}}>⚠ AI flag</span>
@@ -1423,7 +1437,7 @@ function Remediation({findings}) {
                   </div>
                   <div style={{...TYPE.bodyLg,color:MD.onSurface,fontWeight:600,overflow:"hidden",
                     textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {r?.title||f.check_id}
+                    {titleOf(f.check_id)}
                   </div>
                 </div>
                 <div style={{width:80,flexShrink:0}}><ScoreBar score={f.score}/></div>
@@ -1824,7 +1838,7 @@ function Exceptions({findings}) {
   };
 
   const acts = findings.filter(f=>f.status==="failed"||f.status==="error");
-  const filt = acts.filter(f=>{const t=REM[f.check_id]?.title||f.check_id;return !q||f.check_id.toLowerCase().includes(q.toLowerCase())||t.toLowerCase().includes(q.toLowerCase());});
+  const filt = acts.filter(f=>{const t=titleOf(f.check_id);return !q||f.check_id.toLowerCase().includes(q.toLowerCase())||t.toLowerCase().includes(q.toLowerCase());});
   const ackd = Object.values(exs);
 
   return (
@@ -1844,7 +1858,7 @@ function Exceptions({findings}) {
         <div style={{marginBottom:22}}>
           <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:10}}>Acknowledged ({ackd.length})</div>
           <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {ackd.map(ex=>{const m=EXS[ex.status]||EXS.fixed;const t=REM[ex.check_id]?.title||ex.check_id;
+            {ackd.map(ex=>{const m=EXS[ex.status]||EXS.fixed;const t=titleOf(ex.check_id);
               return (
                 <div key={ex.check_id} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd,padding:"10px 14px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -1876,7 +1890,7 @@ function Exceptions({findings}) {
           boxSizing:"border-box"}}/>
       <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {filt.map(f=>{
-          const ex=exs[f.check_id];const m=ex?EXS[ex.status]:null;const t=REM[f.check_id]?.title||f.check_id;
+          const ex=exs[f.check_id];const m=ex?EXS[ex.status]:null;const t=titleOf(f.check_id);
           return (
             <div key={f.check_id} style={{background:MD.surfaceCont,boxShadow:elevation(1),borderRadius:MD.radiusMd}}>
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",flexWrap:"wrap"}}>
@@ -1911,7 +1925,7 @@ function Exceptions({findings}) {
             <div style={{...TYPE.labelSm,color:MD.primary,marginBottom:6}}>Acknowledge finding</div>
             <div style={{...TYPE.labelMd,color:MD.outline,marginBottom:5}}>{form}</div>
             <div style={{...TYPE.titleMd,color:MD.onSurface,marginBottom:22,lineHeight:1.4}}>
-              {REM[form]?.title||form}
+              {titleOf(form)}
             </div>
 
             <div style={{...TYPE.labelSm,color:MD.outline,marginBottom:11}}>Status</div>
@@ -2135,7 +2149,8 @@ export default function App() {
           .eg-overlay.open{display:block;}
           .eg-main{margin-left:0!important;padding:16px!important;}
           .eg-topbar{left:0!important;}
-          .eg-top-header{left:0!important;padding-left:56px!important;}
+          .eg-top-header{left:0!important;padding:0 12px 0 56px!important;gap:8px!important;}
+          .eg-top-lastscan{display:none!important;}
           .eg-hamburger{display:flex!important;}
           .eg-kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
           .eg-chart-row{grid-template-columns:1fr!important;}
