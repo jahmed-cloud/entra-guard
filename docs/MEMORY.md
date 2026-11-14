@@ -39,6 +39,8 @@ Decisions that were made, why, and mistakes worth not repeating. Add an entry wh
 - **`tasks.py` builds `ALL_CHECKS` in three steps** (`ALL_CHECKS`, `EXTRA_CHECKS`, `WORKSHEET_CHECKS`). A function defined after the lists but never added is dead code.
 - **Graph advanced queries** (`$count`, `NOT` filters) need `headers={"ConsistencyLevel": "eventual"}` or they return 400.
 - **The mobile sidebar wrapper must keep `width:232`** or the slide-out transform moves 0px.
+- **A check's docstring is its title.** The first docstring line must be `AZURE-XXX-001 — Title`. `scripts/gen_check_titles.py` turns those into `services/web-ui/src/checkTitles.json` (dashboard titles) and `docs/CHECKS.md`; an engine test fails if they are stale. Run the script after adding or renaming a check.
+- **README screenshots** are produced by `scripts/screenshots/` (seed sample data, then drive headless Chrome). Retake them after a visible UI change; look at every image before committing, because the first attempt exposed four real UI bugs.
 - **Version lives in several places** — see [RELEASING.md](RELEASING.md).
 - **Breaking changes** go in UPGRADE-NOTES with a "what you might notice" row; pushing `latest` delivers them to everyone who runs `docker compose pull`.
 
@@ -59,4 +61,5 @@ Decisions that were made, why, and mistakes worth not repeating. Add an entry wh
 | 2026-10-30 | (PR #1) | Security review: OAuth state check, MSAL roles, admin-only writes, PBKDF2, rate-limiter keying, tests and CI |
 | 2026-11-09 | (PR #2) | About page, Sponsor button, mobile menu fix |
 | 2026-11-10 | v2.4.0 (PR #3) | Example compose file, scheduler image fix, kombu pin, multi-arch images |
+| 2026-11-15 | v2.5.1 | Titles for all 122 checks, coverage ring totals, login margin, phone top bar; README screenshots and generated check catalogue |
 | 2026-11 | v2.5.0 | Hardening: session re-validation, Redis rate limiter, input validation, result validation, Graph client hardening, impact score, security headers, container hardening |
