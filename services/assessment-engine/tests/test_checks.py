@@ -242,3 +242,27 @@ def test_graph_client_does_not_retry_permission_errors(monkeypatch):
     except RuntimeError:
         pass
     assert len(calls) == 1
+
+
+# ── UI titles ─────────────────────────────────────────────────────────────────
+
+def test_ui_check_titles_are_up_to_date():
+    """services/web-ui/src/checkTitles.json and docs/CHECKS.md are generated
+    from the check docstrings. If this fails, run: python scripts/gen_check_titles.py"""
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    script = root / "scripts" / "gen_check_titles.py"
+    if not script.exists():  # e.g. tests run from an image that only ships the engine
+        return
+    spec = importlib.util.spec_from_file_location("gen_check_titles", script)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    titles = gen.collect_titles(gen.TASKS.read_text(encoding="utf-8"))
+    assert gen.OUT.read_text(encoding="utf-8").replace("\r\n", "\n") == gen.render(titles)
+    checks = gen.collect_checks(gen.TASKS.read_text(encoding="utf-8"))
+    assert gen.CATALOGUE.read_text(encoding="utf-8").replace("\r\n", "\n") == gen.render_catalogue(checks)
+
+    # Every registered check must have a title, i.e. a docstring "ID — Title".
+    ids = {res["check_id"] for _, res in _run_all(EmptyGraph()) if isinstance(res, dict)}
+    assert sorted(ids - set(titles)) == []

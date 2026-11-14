@@ -1,16 +1,21 @@
 # EntraGuard — Azure Identity Security Posture Management
 
-> **Continuously assess, monitor, and harden your Microsoft Entra ID tenant against 115 security checks — with step-by-step remediation, compliance mapping, and real-time dashboards.**
+> **Continuously assess, monitor, and harden your Microsoft Entra ID tenant against 122 security checks — with step-by-step remediation, compliance mapping, and real-time dashboards.**
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/jahmed22/entra-guard-api?label=API+Pulls&logo=docker)](https://hub.docker.com/r/jahmed22/entra-guard-api)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-lightgrey)](https://hub.docker.com/r/jahmed22/entra-guard-api)
+
+![EntraGuard dashboard showing posture score, findings by severity and domain, and trends](docs/images/dashboard.png)
+
+<sub>Screenshots use sample data for a fictional tenant (contoso.com).</sub>
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
@@ -35,7 +40,7 @@
 
 ## Overview
 
-EntraGuard is a production-grade, containerised **Azure Identity Security Posture Management (ISPM)** platform. It continuously assesses your Microsoft Entra ID (Azure AD) tenant against a catalogue of 115+ checks covering:
+EntraGuard is a production-grade, containerised **Azure Identity Security Posture Management (ISPM)** platform. It continuously assesses your Microsoft Entra ID (Azure AD) tenant against a catalogue of 122 checks covering:
 
 - Conditional Access policies
 - MFA & authentication methods
@@ -50,10 +55,60 @@ Every finding includes a **plain-English risk description**, **numbered step-by-
 
 ---
 
+## Screenshots
+
+All screenshots show EntraGuard v2.5 with sample data for a fictional tenant.
+
+### Fix first — biggest impact
+
+Checks are weighted by severity, and each failed check shows how many points fixing it adds to the risk-weighted score. Low-effort Critical and High items are flagged as quick wins.
+
+![Fix first card ranking failed checks by the points each fix adds](docs/images/fix-first.png)
+
+### Findings
+
+Every failed check with its severity and risk score. Filter by severity or status, search, and export to CSV.
+
+![Findings list with severity, status and risk score for each check](docs/images/findings.png)
+
+Open a finding for the reason it matters, numbered remediation steps, a link to Microsoft's documentation, and the affected users or apps.
+
+![An opened finding showing why it matters, step-by-step fix and affected accounts](docs/images/finding-detail.png)
+
+### Remediation planner
+
+Failed checks grouped by effort: quick wins (under an hour), this week, and multi-week project work.
+
+![Remediation page grouping findings into quick wins, this week and project work](docs/images/remediation.png)
+
+### Compliance
+
+Findings mapped to NIST CSF, CIS Azure v2 and ISO 27001 controls.
+
+![Compliance page showing NIST CSF functions with pass rates per control](docs/images/compliance.png)
+
+### Scan history
+
+![Scan history listing completed scans with passed and failed counts](docs/images/scan-history.png)
+
+### Users and sign-in
+
+Local accounts with admin and viewer roles, plus optional Microsoft sign-in.
+
+| Users | Sign-in |
+|---|---|
+| ![User management page](docs/images/users.png) | ![Login page with Microsoft and local admin options](docs/images/login.png) |
+
+### Mobile
+
+<img src="docs/images/mobile.png" alt="Dashboard on a phone-sized screen" width="300">
+
+---
+
 ## Features
 
 ### Assessment Engine
-- **115 automated checks** across 12 security domains
+- **122 automated checks** across 9 security domains
 - Real-time assessment against a live Microsoft Entra ID tenant via Microsoft Graph API
 - Celery-based async execution — scans complete in under 5 minutes
 - Scheduled daily scans (06:00 UTC by default, configurable via cron)
@@ -183,7 +238,7 @@ LOCAL_ADMIN_PASSWORD=your-admin-password
 APP_BASE_URL=http://your-server-ip:3000
 ```
 
-Every variable is documented in [`.env.example`](.env.example). Set `EG_VERSION=v2.5.0` to pin an image version instead of `latest`.
+Every variable is documented in [`.env.example`](.env.example). Set `EG_VERSION=v2.5.1` to pin an image version instead of `latest`.
 
 ### 4. Pull and start
 
@@ -205,10 +260,10 @@ Navigate to **http://localhost:3000**, log in with your `LOCAL_ADMIN_USERNAME` /
 
 | Image | Tags | Size |
 |-------|------|------|
-| `jahmed22/entra-guard-api` | `latest`, `v2.5.0` | ~600 MB |
-| `jahmed22/entra-guard-ui` | `latest`, `v2.5.0` | ~50 MB |
-| `jahmed22/entra-guard-worker` | `latest`, `v2.5.0` | ~530 MB |
-| `jahmed22/entra-guard-scheduler` | `latest`, `v2.5.0` | ~530 MB |
+| `jahmed22/entra-guard-api` | `latest`, `v2.5.1` | ~600 MB |
+| `jahmed22/entra-guard-ui` | `latest`, `v2.5.1` | ~50 MB |
+| `jahmed22/entra-guard-worker` | `latest`, `v2.5.1` | ~530 MB |
+| `jahmed22/entra-guard-scheduler` | `latest`, `v2.5.1` | ~530 MB |
 
 All images are multi-arch: **linux/amd64** and **linux/arm64** (Raspberry Pi 4/5, Apple Silicon, DietPi).
 
@@ -244,7 +299,7 @@ docker compose up -d
 Each image has its own Dockerfile. Build and push all four as multi-arch manifests (`linux/amd64` + `linux/arm64`) with `docker buildx`:
 
 ```bash
-VERSION=v2.5.0
+VERSION=v2.5.1
 for pair in api:Dockerfile.api worker:Dockerfile.engine scheduler:Dockerfile.scheduler ui:Dockerfile.web; do
   name=${pair%%:*}; file=${pair#*:}
   docker buildx build --platform linux/amd64,linux/arm64 -f "$file" \
@@ -467,33 +522,30 @@ Microsoft Entra ID SSO is implemented in the codebase but requires an HTTPS redi
 
 ## Check Catalogue
 
-EntraGuard runs 115 checks across 12 domains. Full details in [`docs/CHECKS.md`](docs/CHECKS.md).
+EntraGuard runs **122 checks** across 9 domains. The full list, with every check ID, severity and title, is in [`docs/CHECKS.md`](docs/CHECKS.md). That file is generated from the engine, so it always matches what actually runs.
 
 ### Summary by domain
 
 | Domain | Checks | Key Controls |
 |--------|--------|-------------|
-| Conditional Access | 22 | Break glass exclusion, MFA for all users, legacy auth block, risk-based policies |
-| MFA & Authentication | 11 | Admin MFA, number matching, phishing-resistant MFA, fraud alert |
-| Privileged Identity (PIM) | 8 | No permanent assignments, JIT activation, approval requirements |
-| Privileged Accounts | 7 | Cloud-only admins, max GA count, role separation |
-| Identity Hygiene | 10 | SSPR, stale accounts, security defaults, cross-tenant policy |
-| Applications | 14 | Credential expiry, consent controls, assignment required, redirect URIs |
-| Guests | 6 | Pending invitations, stale guests, invite restrictions |
-| Groups | 7 | Expiration policy, empty groups, dynamic membership |
-| Monitoring & Risk | 8 | Risky users, sign-in logs, legacy auth sign-ins, lockout events |
-| Break Glass | 3 | Account existence, CA exclusion, password rotation |
-| Governance | 4 | Access reviews, entitlement management |
-| Directory | 15 | Sync accounts, group creation, app registration restrictions |
+| Conditional Access | 29 | Break glass exclusion, MFA for all users, legacy auth block, risk-based policies |
+| Privileged Identity | 21 | No permanent assignments, PIM approval and MFA, cloud-only admins, break glass accounts |
+| Identity | 21 | SSPR, stale accounts, security defaults, federation and domain trust |
+| Applications | 19 | Credential expiry, consent controls, assignment required, redirect URIs |
+| MFA | 11 | Admin MFA, registration, phishing-resistant methods, fraud alert |
+| Groups | 7 | Expiration policy, empty groups, owners, nested admin groups |
+| Monitoring | 7 | Diagnostic settings, risky users, sign-in logs, lockout events |
+| Guests | 5 | Pending invitations, stale guests, invite restrictions |
+| Governance | 2 | Access reviews, entitlement management |
 
 ### Severity distribution
 
-| Severity | Count | Response SLA |
+| Severity | Count | Suggested response |
 |----------|-------|--------------|
-| Critical | ~10 | Immediate (same day) |
-| High | ~55 | This week |
-| Medium | ~35 | This month |
-| Low | ~15 | Next quarter |
+| Critical | 11 | Immediate (same day) |
+| High | 53 | This week |
+| Medium | 39 | This month |
+| Low | 19 | Next quarter |
 
 ---
 
@@ -677,7 +729,7 @@ EntraGuard posts a summary card after each scan with critical and high finding c
   "scan_id": "uuid",
   "completed_at": "2026-06-14T10:00:00Z",
   "tenant": "My Azure Tenant",
-  "checks_total": 115,
+  "checks_total": 122,
   "checks_failed": 43,
   "critical": 6,
   "high": 28,

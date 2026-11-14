@@ -283,3 +283,16 @@ The images on Docker Hub (`jahmed22/entra-guard-{api,worker,scheduler,ui}`) are 
 - Validation errors showed as `[object Object]` on the Users page.
 
 **Known, still open** (tracked in `docs/TASKS.md`): the API container still runs as root; users are still a JSON file; exceptions and "fixed" markers are still per-browser; there are no database migrations.
+
+
+---
+
+## 12. v2.5.1 — dashboard fixes
+
+Dashboard fixes found while taking the README screenshots. No breaking changes, no new settings, no database changes; `docker compose pull && docker compose up -d` is all that is needed.
+
+- **Check titles.** Only 20 of the 122 checks had a title in the dashboard; the rest showed their raw ID (for example `AZURE-PRIV-MAILBOX`) on the Findings, Remediation, Exceptions and dashboard pages and in the CSV export. Titles for every check are now generated from the engine (`scripts/gen_check_titles.py`).
+- **Coverage rings** used hard-coded totals that had gone stale, so they could read "17/15 pass — 113%". Totals now come from the scan.
+- **Login page** had a white strip around the edge (the browser's default page margin).
+- **Phone layout:** the tenant name slid underneath the "critical" badge in the top bar.
+- New `docs/CHECKS.md`, a generated catalogue of every check (the README linked to it but it did not exist), and screenshots in the README. The README's check counts were out of date (115 → 122).

@@ -51,6 +51,8 @@ What it covers, plus what to check by hand:
 
 Then `docker compose -p egtest down -v`.
 
+If the UI changed visibly, retake the README screenshots while the stack is up — see [`scripts/screenshots/README.md`](../scripts/screenshots/README.md).
+
 ## 4. Merge
 
 Branch, commit, open a PR, wait for CI (Python tests + web UI build), squash-merge. Commits are single-author with no co-author trailers.

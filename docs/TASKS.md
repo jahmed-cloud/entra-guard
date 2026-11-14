@@ -21,14 +21,19 @@ The single list of what's next. Move an item to **Done** with its release when i
 - Account lockout per username, in addition to the per-IP rate limit.
 - Optional Redis password and Postgres TLS for deployments where the internal network isn't trusted.
 - **README documents things the code doesn't do:** email/Teams/Slack notifications, `SCAN_SCHEDULE_CRON` and `CELERY_CONCURRENCY` (the schedule is a fixed 24 h and concurrency is fixed at 2). Either build them or remove them from the README.
-- Mobile top bar: the tenant name and last-scan time are hidden behind the "critical" badge on narrow screens.
 - Export findings (CSV/PDF) from the UI.
 - Support national clouds (`graph.microsoft.us`, `microsoftgraph.chinacloudapi.cn`) — `GraphClient.GRAPH_ORIGIN` is currently fixed.
 - Image scanning (Trivy) and Dependabot in CI; pin base images by digest.
 - End-to-end test in CI: bring the example stack up and run the smoke test from RELEASING.md.
 - Company-sponsor section in the README once there are sponsors.
+- Only 20 checks have a full hand-written remediation guide in the UI (`REM` in `App.tsx`); the other 102 fall back to the engine's one-paragraph remediation text. Write guides for the Critical and High ones first.
 
 ## Done
+
+### v2.5.1
+- Titles for all 122 checks in the dashboard (generated from the engine); generated `docs/CHECKS.md`
+- Coverage ring totals, login page margin, phone top bar overlap
+- README screenshots (`docs/images`, regenerate with `scripts/screenshots`)
 
 ### v2.5.0
 - Accounts are re-checked against the user store on every request (disable/demote/delete is immediate)

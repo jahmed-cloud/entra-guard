@@ -18,6 +18,7 @@ Self-hosted Entra ID (Azure AD) security posture scanner. Docker Compose stack:
 - Check results pass through `normalize_result` in `tasks.py`; the valid statuses, severities and efforts are the constants above it.
 - Users are a JSON file (`USERS_FILE`, default `/app/data/users.json`); the env admin is a built-in that's never saved. MSAL users are stored as `msal:<upn>`.
 - Each check returns `{check_id, severity, status, score, affected_resources, evidence, risk_description, remediation_steps, estimated_effort}` and must catch its own Graph errors. `check_id`s must be unique — `tests/test_checks.py` enforces it.
+- A check's first docstring line is `AZURE-XXX-001 — Title`. After adding or renaming a check run `python scripts/gen_check_titles.py`; it regenerates the dashboard titles (`checkTitles.json`) and `docs/CHECKS.md`, and an engine test fails if they are stale.
 - Graph advanced queries (`$count`, `NOT` filters) need `headers={"ConsistencyLevel": "eventual"}` on `GraphClient.get`/`get_all_pages`.
 - User-facing release notes go in `UPGRADE-NOTES.md`; breaking changes get a "what you might notice" row.
 - Maintainer links (website, GitHub, email) and the donate link live in the `AUTHOR` / `DONATE_URL` constants near the top of `App.tsx` — the About page, sidebar Sponsor button and footer all read from them. `.github/FUNDING.yml` drives the repo's Sponsor button.
