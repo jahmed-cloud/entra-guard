@@ -195,7 +195,7 @@ if ($null -eq $app) {
         displayName            = $AppName
         signInAudience         = "AzureADMyOrg"
         requiredResourceAccess = $requiredResourceAccessBody
-        notes                  = "EntraGuard CSPM — Azure Identity Security Posture Management. See https://github.com/jahmed-cloud/entra-guard"
+        notes                  = "EntraGuard — Identity Security Posture Management (ISPM) for Microsoft Entra ID. See https://github.com/jahmed-cloud/entra-guard"
     }
     $app = New-MgApplication -BodyParameter $appBody
     Write-OK "App Registration created: $($app.DisplayName)  (Object ID: $($app.Id))"

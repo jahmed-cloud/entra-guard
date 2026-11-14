@@ -501,7 +501,7 @@ function Nav({view, setView, fails, user, onLogout}) {
           </div>
           <div>
             <div style={{...TYPE.titleSm,color:MD.onSurface}}>EntraGuard</div>
-            <div style={{...TYPE.labelSm,color:MD.outline,marginTop:1}}>Azure CSPM · v{APP_VERSION}</div>
+            <div style={{...TYPE.labelSm,color:MD.outline,marginTop:1}}>Entra ID ISPM · v{APP_VERSION}</div>
           </div>
         </div>
       </div>
